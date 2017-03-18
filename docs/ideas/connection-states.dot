@@ -1,0 +1,32 @@
+digraph "connectionstates" {
+	connection [shape="none",label=""];
+	INITIAL;
+	AUTH;
+	CLIENT;
+	PRESYNC;
+	SYNC;
+	PENDING;
+	PEER;
+	ERROR;
+	disconnect [shape="box",label="disconnected"];
+
+	connection -> INITIAL [label="on connection"];
+	INITIAL -> ERROR [style="dotted",color="red"];
+	INITIAL -> AUTH [label="successful authentication"];
+	AUTH -> CLIENT [label="client message"];
+	AUTH -> PRESYNC [label="presync message"];
+	AUTH -> ERROR [style="dotted",color="red"];
+	CLIENT -> ERROR [style="dotted",color="red"];
+	CLIENT -> disconnect [label="disconnect message"];
+	PRESYNC -> SYNC [label="both peers in presync"];
+	PRESYNC -> ERROR [style="dotted",color="red"];
+	SYNC -> PENDING [label="pending message"];
+	SYNC -> PEER [label="peer message"];
+	SYNC -> ERROR [style="dotted",color="red"];
+	PENDING -> PEER [label="peer message"];
+	PENDING -> ERROR [style="dotted",color="red"];
+	PENDING -> disconnect [label="disconnect message"];
+	PEER -> ERROR [style="dotted",color="red"];
+	PEER -> disconnect [label="disconnect message"];
+	ERROR -> disconnect [label="report error"];
+}

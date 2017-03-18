@@ -1,0 +1,44 @@
+Link-state algorithm with backup links
+
+1. Init Confirmed list w/myself
+2. For node just added to confirmed, select Link State Packet
+3. For each neighbor, calculate cost, then:
+   a. If neighbor has no entry on either list, add to Tentative.
+   b. If neighbor has 1 entry on Confirmed via a different next hop,
+      but no entry on Tentative, add to Tentative.
+   c. If neighbor has 2 entries on Confirmed, skip.
+   d. If neighbor has entry on Tentative via a different next hop, add
+      to Tentative.
+   e. If neighbor has entry on Tentative via the same next hop, update
+      the cost as appropriate.
+4. If Tentative is empty, stop.  Otherwise, pick the lowest cost
+   Tentative entry; if target has 2 entries on Confirmed (shouldn't
+   happen), discard and repeat Step 4; otherwise, add it to Confirmed
+   and go to Step 2.
+
+
+Practical Implementation
+------------------------
+
+struct node {
+  ...;
+  int ls_cnt;
+  struct link_state *ls_tab;
+  struct route *primary;
+  struct route *secondary; /* pointer makes it easier to swap */
+  ...;
+};
+
+struct route {
+  ...; /* gunk to add to a priority queue */
+  struct node *target;
+  int cost;
+  struct node *next;
+  int state; /* superfluous? */
+};
+
+ROUTE_STATE_TENTATIVE
+ROUTE_STATE_CONFIRMED
+
+Link state: Computer Networks pg. 277
+  Route calculation: pg. 280

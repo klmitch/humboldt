@@ -1,0 +1,87 @@
+For configuration and state, I intend to use YAML for a file format.
+There are some disadvantages to using it for configuration, but I
+don't believe they are ultra-significant.  For both, root node will be
+a mapping node.  For ports in the config, the 'ports' key may be
+either a sequence or a scalar string node; in the sequence case, each
+element is a mapping describing the port, and in the scalar string
+case, the string gives a path.  If the path is a file, its contents
+should be a YAML document containing a sequence of mappings; if the
+path is a directory, all files contained in that directory must be
+YAML files containing mappings (a given file may contain multiple
+documents).  In all cases, the mappings describe the port: IP address
+(v4 or v6); port number; advertised IP address and port number;
+network name; and authn/authz information.  Port descriptions must
+also allow for UNIX ports to allow for local applications to connect
+to humboldt.
+
+Sample:
+
+  ports:
+  - local: /var/run/humboldt
+    type: client
+    username: local_app
+  - ip: 10.0.0.5
+    port: 6700
+    network: ExampleNet
+    type: peer
+  - ip: 10.0.0.5
+    port: 6701
+    advertise:
+      ip: 127.0.5.23
+      port: 6700
+    type: peer
+
+In this sample, 3 ports are defined: a UNIX socket at
+/var/run/humboldt that only accepts clients and assigns them the
+username "local_app"; a port at 10.0.0.5:6700 that accepts connections
+from other peers on ExampleNet; and a port at 10.0.0.5:6701 that is
+advertised to the rest of the peers as 127.0.5.23:6700 (presumably
+accomplished by port forwarding).  If 'ip' is left out, the port will
+be opened on all interfaces available at the time of start/restart; if
+'ip' is "0.0.0.0", only the v4 interfaces will be selected, and if
+'ip' is "::", only the v6 interfaces will be selected.  The 'port'
+will have a reasonable default (6700?), and the loopback address is
+never advertised (despite the use of 127.0.5.23 as an example above)
+even though it may be used for peers.  For 'local' ports, 'type' will
+be forced to 'client', while 'ip'-type ports will default 'type' to
+'peer'.  To prohibit advertising of a peer port, use 'advertise:
+false' instead of giving it a mapping of ip and port; if 'ip' or
+'port' are not provided to the 'advertise' mapping, they default to
+whatever they are for the port.  If the port specifies an IPv6
+address, a warning will be issued for 'advertise' (unless it's
+'false') as IPv6 NAT is not recommended.  'advertise' will be ignored
+on client ports and local ports.  Finally, a port with ONLY the
+'advertise' key (and, optionally, the 'network' key) will not actually
+open any ports, but rather only advertise the specified IP and port
+(which both must be provided) to the network for peers.
+
+Other information may be present in the port configuration that hasn't
+been mentioned so far, such as the 'username' for the 'local' port
+above; this has to do with the authentication/authorization and other
+security-related options that haven't been fully specified yet.
+
+----------------------------------------------------------------------
+
+  ports:
+  - local: /var/run/humboldt
+    username: local_app
+  - ip: 10.0.0.5
+    port: 6700
+    type: peer
+    advertise:
+    - ip: 127.0.5.23
+    - network: ExampleNet
+
+Two ports specified, with 2 advertisements.  The first port is a local
+port with username set statically to local_app; the keys 'type', 'ip',
+and 'port' are prohibited, as is the 'advertise' key, and the port is
+automatically a 'client'-type port.
+
+The second port opens 10.0.0.5:6700 as a peer port and provides 2
+network advertisements.  The first advertisement advertises
+127.0.5.23:6700 on the public network, while the second advertises
+10.0.0.5:6700 on the ExampleNet private network.  Valid keys for
+advertise entries are 'ip', 'port', and 'network'.  The 'advertise'
+key may also be set to boolean 'false' to indicate the port shouldn't
+be advertised at all.  If 'advertise' wasn't provided, the second port
+would be advertised as 10.0.0.5:6700 on the public network.

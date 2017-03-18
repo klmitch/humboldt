@@ -1,0 +1,44 @@
+msc {
+	Client, Server;
+
+	Client >> Server [label="network connection"];
+	Client <- Server [label="Connection State (INITIAL INSECURE)"];
+	--- [label="Establish TLS"];
+	Client -> Server [label="Start TLS"];
+	Client <- Server [label="Start TLS OK"];
+	...;
+	Client <- Server [label="Connection State (INITIAL SECURE)"];
+	--- [label="Perform Authentication"];
+	Client -> Server [label="Start SASL"];
+	Client <- Server [label="SASL DATA"];
+	Client -> Server [label="SASL DATA"];
+	...;
+	Client <- Server [label="Connection State (AUTH SECURE)"];
+	--- [label="Request Client State"];
+	Client -> Server [label="Client"];
+	Client <- Server [label="Connection State (CLIENT SECURE) [ID]"];
+	...;
+	Client <- Server [label="PING"];
+	Client -> Server [label="PONG"];
+	--- [label="Request Peer State"];
+	Client -> Server [label="Connection State (PRESYNC SECURE) [ID] [C-TS]"];
+	Client <- Server [label="Connection State (PRESYNC SECURE) [ID] [S-TS] [C-TS]"];
+	Client -> Server [label="Connection State (SYNC SECURE) [S-TS]"];
+	Client note Server [label="Occurs simultaneously with link\nstate exchange from server"];
+	Client -> Server [label="Link State (1)"];
+	...;
+	Client -> Server [label="Link State (n)"];
+	Client -> Server [label="Connection State (PEER SECURE)"];
+	Client note Server [label="Occurs simultaneously with link\nstate exchange from client"];
+	Client <- Server [label="Connection State (SYNC SECURE)"];
+	Client <- Server [label="Link State (1)"];
+	...;
+	Client <- Server [label="Link State (n)"];
+	Client <- Server [label="Connection State (PEER SECURE)"];
+	...;
+	Client -> Server [label="PING [TS]"];
+	Client <- Server [label="PONG [TS]"];
+	...;
+	Client <- Server [label="PING [TS]"];
+	Client -> Server [label="PONG [TS]"];
+}
