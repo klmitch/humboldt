@@ -1,0 +1,95 @@
+// -*- c -*-
+
+%target "alloc.c"
+
+%preamble {
+#include <assert.h>
+#include <stdlib.h>
+
+#include "alloc.h"
+#include "common.h"
+
+struct test_struct {
+  unsigned int	ts_value;
+};
+
+freelist_t test_freelist = FREELIST_INIT(struct test_struct, 0);
+%}
+
+%mock void *malloc(size_t size)
+%mock void free(void *ptr)
+
+%fixture _freeitem_t *populate_freelist {
+  _freeitem_t *items;
+
+  items = (_freeitem_t *)malloc(sizeof(_freeitem_t) * 2);
+  assert(items);
+
+  items[0].fi_next = &items[1];
+  items[1].fi_next = 0;
+
+  test_freelist.fl_alloc = 2;
+  test_freelist.fl_count = 2;
+  test_freelist.fl_freelist = &items[0];
+
+  return items;
+%} teardown {
+  free(populate_freelist);
+
+  test_freelist.fl_alloc = 0;
+  test_freelist.fl_count = 0;
+  test_freelist.fl_freelist = 0;
+%}
+
+%test alloc_freelist(!populate_freelist) {
+  _freeitem_t testvar[2];
+  void *result;
+
+  testvar[0].fi_next = &testvar[1];
+  test_freelist.fl_alloc = 2;
+  test_freelist.fl_count = 2;
+  test_freelist.fl_freelist = &testvar[0];
+
+  result = alloc(&test_freelist);
+
+  hypo_assert(result == (void *)&testvar[0]);
+  hypo_assert(test_freelist.fl_alloc == 2);
+  hypo_assert(test_freelist.fl_count == 1);
+  hypo_assert(test_freelist.fl_freelist == &testvar[1]);
+  hypo_mock_checkcalls_malloc(0, 0);
+%}
+
+%test alloc_allocate {
+  hypo_mock_expectcalls_malloc expected[] = {
+    {0, test_freelist.fl_size}
+  };
+  _freeitem_t testvar;
+  void *result;
+
+  hypo_mock_addreturn_malloc(&testvar);
+
+  result = alloc(&test_freelist);
+
+  hypo_assert(result == (void *)&testvar);
+  hypo_assert(test_freelist.fl_alloc == 1);
+  hypo_assert(test_freelist.fl_count == 0);
+  hypo_assert(test_freelist.fl_freelist == 0);
+  hypo_mock_checkcalls_malloc(expected, 1);
+%}
+
+%test alloc_outofmemory {
+  hypo_mock_expectcalls_malloc expected[] = {
+    {0, test_freelist.fl_size}
+  };
+  void *result;
+
+  hypo_mock_addreturn_malloc(0);
+
+  result = alloc(&test_freelist);
+
+  hypo_assert(result == 0);
+  hypo_assert(test_freelist.fl_alloc == 0);
+  hypo_assert(test_freelist.fl_count == 0);
+  hypo_assert(test_freelist.fl_freelist == 0);
+  hypo_mock_checkcalls_malloc(expected, 1);
+%}
