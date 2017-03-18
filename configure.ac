@@ -31,11 +31,15 @@ permissions and limitations under the License.
 ])
 
 AC_CONFIG_SRCDIR([src/main.c])
+AC_CONFIG_MACRO_DIRS([m4])
+AC_CONFIG_LIBOBJ_DIR([lib])
 AM_INIT_AUTOMAKE
 
 AC_PROG_CC
 
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_FILES([Makefile])
+
+AX_FUNC_GETOPT_LONG
 
 AC_OUTPUT
