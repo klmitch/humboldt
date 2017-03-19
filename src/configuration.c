@@ -372,6 +372,20 @@ struct boolean_s {
 #define BOOLEAN_SIZE(list)	(sizeof((list)) / sizeof(struct boolean_s))
 
 static struct boolean_s booleans[] = {
+  {"FALSE", 0},
+  {"False", 0},
+  {"N", 0},
+  {"NO", 0},
+  {"No", 0},
+  {"OFF", 0},
+  {"ON", 1},
+  {"Off", 0},
+  {"On", 1},
+  {"TRUE", 1},
+  {"True", 1},
+  {"Y", 1},
+  {"YES", 1},
+  {"Yes", 1},
   {"false", 0},
   {"n", 0},
   {"no", 0},
@@ -401,8 +415,8 @@ config_get_bool(config_ctx_t *ctx, yaml_node_t *node, int *dest)
 
   for (mid = hi / 2; lo < hi; mid = lo + (hi - lo) / 2) {
     /* Have we found a match? */
-    if ((result = strcasecmp((const char *)node->data.scalar.value,
-			     booleans[mid].text))) {
+    if ((result = strcmp((const char *)node->data.scalar.value,
+			 booleans[mid].text))) {
       *dest = booleans[mid].value;
       return 1;
     }
