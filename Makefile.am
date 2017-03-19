@@ -23,4 +23,6 @@ bin_PROGRAMS = humboldt
 humboldt_SOURCES = \
 	include/common.h \
 	include/configuration.h \
+	include/log.h \
+	src/log.c \
 	src/main.c

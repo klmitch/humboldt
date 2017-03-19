@@ -22,6 +22,7 @@
 #include <string.h>
 
 #include "include/configuration.h"
+#include "include/log.h"
 
 /* Recognized short options */
 static const char *opt_str = "c:dDhv";
@@ -154,11 +155,13 @@ main(int argc, char **argv)
   parse_args(argc, argv, &conf);
 
   /* Output information about the configuration */
-  printf("Configuration file: \"%s\"%s\n", conf.cf_config,
-	 (conf.cf_flags & CONFIG_FILE_DEFAULT) ? " (default)" : "");
-  printf("Debugging mode %s%s\n",
-	 (conf.cf_flags & CONFIG_DEBUG) ? "ENABLED" : "DISABLED",
-	 (conf.cf_flags & CONFIG_DEBUG_FIXED) ? " (no override)" : "");
+  log_emit(&conf, LOG_DEBUG, "Configuration file: \"%s\"%s\n", conf.cf_config,
+	   (conf.cf_flags & CONFIG_FILE_DEFAULT) ? " (default)" : "");
+  log_emit(&conf, LOG_DEBUG, "Debugging mode %s%s\n",
+	   (conf.cf_flags & CONFIG_DEBUG) ? "ENABLED" : "DISABLED",
+	   (conf.cf_flags & CONFIG_DEBUG_FIXED) ? " (no override)" : "");
+  log_emit(&conf, LOG_DEBUG, "Log facility %d%s\n", conf.cf_facility >> 3,
+	   (conf.cf_flags & CONFIG_FACILITY_FIXED) ? " (no override)" : "");
 
   return 0;
 }

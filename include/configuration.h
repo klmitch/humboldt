@@ -17,6 +17,8 @@
 #ifndef _HUMBOLDT_CONFIGURATION_H
 #define _HUMBOLDT_CONFIGURATION_H
 
+#include <syslog.h>	/* for LOG_DAEMON */
+
 #include "common.h"	/* for magic_t */
 
 /** \brief Configuration.
@@ -35,6 +37,8 @@ struct _config_s {
   magic_t	cf_magic;	/**< Magic number */
   uint32_t	cf_flags;	/**< Configuration flags */
   const char   *cf_config;	/**< Name of the configuration file */
+  const char   *cf_prog;	/**< The program name */
+  int		cf_facility;	/**< Syslog facility to log to */
 };
 
 /** \brief Configuration magic number.
@@ -58,7 +62,7 @@ struct _config_s {
  * initialized.
  */
 #define CONFIG_INIT()							\
-  {CONFIG_MAGIC, CONFIG_FILE_DEFAULT, DEFAULT_CONFIG}
+  {CONFIG_MAGIC, CONFIG_FILE_DEFAULT, DEFAULT_CONFIG, 0, LOG_DAEMON}
 
 /** \brief Debugging enabled.
  *
@@ -82,5 +86,23 @@ struct _config_s {
  * the first "--config" or "-c" option.
  */
 #define CONFIG_FILE_DEFAULT	0x20000000
+
+/** \brief Logging has been initialized.
+ *
+ * This flag is used by the logging abstraction to detect if logging
+ * has been initialized.  Until it has, log messages of \c LOG_INFO or
+ * higher (or \c LOG_DEBUG or higher if debugging is enabled) will be
+ * sent to standard output, with log messages of \c LOG_WARNING or
+ * higher sent to standard error.
+ */
+#define CONFIG_LOG_INITIALIZED	0x10000000
+
+/** \brief Facility fixed.
+ *
+ * A configuration flag indicating that the logging facility got its
+ * setting from the command line and cannot be overridden by the
+ * configuration file.
+ */
+#define CONFIG_FACILITY_FIXED	0x08000000
 
 #endif /* _HUMBOLDT_CONFIGURATION_H */
