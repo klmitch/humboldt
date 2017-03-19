@@ -16,8 +16,11 @@
 
 #include <config.h>
 
+#include <errno.h>
 #include <getopt.h>
+#include <limits.h>
 #include <stdarg.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -360,6 +363,119 @@ config_proc_mapping(config_ctx_t *ctx, yaml_node_t *map,
     process_mapping_key(keys, keycnt, (const char *)key->data.scalar.value,
 			dest, ctx, value, &key->start_mark);
   }
+}
+
+struct boolean_s {
+  const char *text;
+  int value;
+};
+#define BOOLEAN_SIZE(list)	(sizeof((list)) / sizeof(struct boolean_s))
+
+static struct boolean_s booleans[] = {
+  {"false", 0},
+  {"n", 0},
+  {"no", 0},
+  {"off", 0},
+  {"on", 1},
+  {"true", 1},
+  {"y", 1},
+  {"yes", 1}
+};
+
+int
+config_get_bool(config_ctx_t *ctx, yaml_node_t *node, int *dest)
+{
+  int lo = 0, hi = BOOLEAN_SIZE(booleans), mid, result;
+
+  /* Sanity-check the node */
+  if (node->type != YAML_SCALAR_NODE) {
+    config_ctx_report(ctx, &node->start_mark, LOG_WARNING,
+		      "Expected scalar node, found %s node", node_type(node));
+    return 0;
+  } else if (strcmp((const char *)node->tag, YAML_BOOL_TAG)) {
+    config_ctx_report(ctx, &node->start_mark, LOG_WARNING,
+		      "Expected node with tag \"" YAML_BOOL_TAG
+		      "\", got tag \"%s\"", node->tag);
+    return 0;
+  }
+
+  for (mid = hi / 2; lo < hi; mid = lo + (hi - lo) / 2) {
+    /* Have we found a match? */
+    if ((result = strcasecmp((const char *)node->data.scalar.value,
+			     booleans[mid].text))) {
+      *dest = booleans[mid].value;
+      return 1;
+    }
+
+    /* Is it to the left or right? */
+    if (result < 0)
+      hi = mid;
+    else
+      lo = mid + 1;
+  }
+
+  /* Incomprehensible value */
+  config_ctx_report(ctx, &node->start_mark, LOG_WARNING,
+		    "Invalid boolean value \"%s\"", node->data.scalar.value);
+  return 0;
+}
+
+int
+config_get_int(config_ctx_t *ctx, yaml_node_t *node, long *dest)
+{
+  long tmp;
+  char *end;
+
+  /* Sanity-check the node */
+  if (node->type != YAML_SCALAR_NODE) {
+    config_ctx_report(ctx, &node->start_mark, LOG_WARNING,
+		      "Expected scalar node, found %s node", node_type(node));
+    return 0;
+  } else if (strcmp((const char *)node->tag, YAML_INT_TAG)) {
+    config_ctx_report(ctx, &node->start_mark, LOG_WARNING,
+		      "Expected node with tag \"" YAML_INT_TAG
+		      "\", got tag \"%s\"", node->tag);
+    return 0;
+  }
+
+  errno = 0; /* reset errno value */
+  tmp = strtol((const char *)node->data.scalar.value, &end, 0);
+
+  if (*end != '\0') {
+    config_ctx_report(ctx, &node->start_mark, LOG_WARNING,
+		      "Invalid integer \"%s\"", node->data.scalar.value);
+    return 0;
+  } else if ((tmp == LONG_MIN || tmp == LONG_MAX) && errno == ERANGE) {
+    config_ctx_report(ctx, &node->start_mark, LOG_WARNING,
+		      "Integer %sflow", tmp < 0 ? "under" : "over");
+    return 0;
+  }
+
+  *dest = tmp;
+  return 1;
+}
+
+int
+config_get_str(config_ctx_t *ctx, yaml_node_t *node, const char **dest,
+	       int allow_null)
+{
+  /* Sanity-check the node */
+  if (node->type != YAML_SCALAR_NODE) {
+    config_ctx_report(ctx, &node->start_mark, LOG_WARNING,
+		      "Expected scalar node, found %s node", node_type(node));
+    return 0;
+  } else if (allow_null && !strcmp((const char *)node->tag, YAML_NULL_TAG)) {
+    *dest = 0;
+    return 1;
+  } else if (strcmp((const char *)node->tag, YAML_STR_TAG)) {
+    config_ctx_report(ctx, &node->start_mark, LOG_WARNING,
+		      "Expected node with tag \"" YAML_STR_TAG
+		      "\", got tag \"%s\"", node->tag);
+    return 0;
+  }
+
+  *dest = (const char *)node->data.scalar.value;
+  return 1;
 }
 
 void

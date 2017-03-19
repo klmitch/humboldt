@@ -18,10 +18,10 @@
 #define _HUMBOLDT_CONFIGURATION_H
 
 #include <syslog.h>	/* for LOG_DAEMON */
+#include <yaml.h>
 
 #include "common.h"	/* for magic_t */
 
-#include <yaml.h>
 
 /** \brief Configuration.
  *
@@ -296,5 +296,47 @@ void config_proc_sequence(config_ctx_t *ctx, yaml_node_t *seq,
  */
 void config_proc_mapping(config_ctx_t *ctx, yaml_node_t *map,
 			 mapkeys_t *keys, size_t keycnt, void *dest);
+
+/** \brief Get a boolean YAML node value.
+ *
+ * Determine the value of a boolean YAML node.
+ *
+ * \param[in]		ctx	The configuration context.
+ * \param[in]		node	The YAML node.
+ * \param[out]		dest	A pointer to an integer to fill in
+ *				with the boolean value.
+ *
+ * \return	A false value if an error occurred, true otherwise.
+ */
+int config_get_bool(config_ctx_t *ctx, yaml_node_t *node, int *dest);
+
+/** \brief Get an integer YAML node value.
+ *
+ * Determine the value of an integer YAML node.
+ *
+ * \param[in]		ctx	The configuration context.
+ * \param[in]		node	The YAML node.
+ * \param[out]		dest	A pointer to an integer to fill in
+ *				with the integer value.
+ *
+ * \return	A false value if an error occurred, true otherwise.
+ */
+int config_get_int(config_ctx_t *ctx, yaml_node_t *node, long *dest);
+
+/** \brief Get a string YAML node value.
+ *
+ * Determine the value of a string YAML node.
+ *
+ * \param[in]		ctx	The configuration context.
+ * \param[in]		node	The YAML node.
+ * \param[out]		dest	A pointer to a character pointer to
+ *				fill in with the string value.
+ * \param[in]		allow_null
+ *				If true, a \c NULL value is allowed.
+ *
+ * \return	A false value if an error occurred, true otherwise.
+ */
+int config_get_str(config_ctx_t *ctx, yaml_node_t *node, const char **dest,
+		   int allow_null);
 
 #endif /* _HUMBOLDT_CONFIGURATION_H */
