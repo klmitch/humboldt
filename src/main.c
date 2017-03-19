@@ -24,7 +24,7 @@
 #include "include/configuration.h"
 
 /* Recognized short options */
-static const char *opt_str = "c:dDh";
+static const char *opt_str = "c:dDhv";
 
 /* Recognized long options */
 static const struct option opts[] = {
@@ -32,6 +32,7 @@ static const struct option opts[] = {
   {"debug", no_argument, 0, 'd'},
   {"no-debug", no_argument, 0, 'D'},
   {"help", no_argument, 0, 'h'},
+  {"version", no_argument, 0, 'v'},
   {0, 0, 0, 0}
 };
 
@@ -47,7 +48,7 @@ usage(const char *prog, int exit_code)
 
   /* Output a usage message */
   fprintf(stream, "Usage: %s [options]\n\n", prog);
-  fprintf(stream, "Maintain an overlay network for the use of clients.\n\n");
+  fprintf(stream, "Start the " PACKAGE_NAME ".\n\n");
   fprintf(stream, "Options:\n");
   fprintf(stream, "-h, --help              Show this help message and "
 	  "exit.\n");
@@ -58,6 +59,7 @@ usage(const char *prog, int exit_code)
 	  "overrides configuration file.\n");
   fprintf(stream, "-D, --no-debug          Disable debugging output; "
 	  "overrides configuration file.\n");
+  fprintf(stream, "-v, --version           Output version information.\n");
 
   exit(exit_code);
 }
@@ -119,6 +121,12 @@ parse_args(int argc, char **argv, config_t *conf)
     case 'h':
       /* Emit the usage message */
       usage(argv[0], EXIT_SUCCESS);
+      break;
+
+    case 'v':
+      /* Emit the description and version */
+      printf("%s\n", PACKAGE_STRING);
+      exit(EXIT_SUCCESS);
       break;
 
     case '?':
