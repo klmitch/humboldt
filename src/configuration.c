@@ -406,7 +406,14 @@ config_get_bool(config_ctx_t *ctx, yaml_node_t *node, int *dest)
     config_ctx_report(ctx, &node->start_mark, LOG_WARNING,
 		      "Expected scalar node, found %s node", node_type(node));
     return 0;
-  } else if (strcmp((const char *)node->tag, YAML_BOOL_TAG)) {
+
+  /* The libyaml parser doesn't handle implicit tags, so if a boolean
+   * node is not explicitly tagged as boolean, we provisionally allow
+   * str tags with a plain style to be substituted.
+   */
+  } else if (strcmp((const char *)node->tag, YAML_BOOL_TAG) &&
+	     (strcmp((const char *)node->tag, YAML_STR_TAG) ||
+	      node->data.scalar.style != YAML_PLAIN_SCALAR_STYLE)) {
     config_ctx_report(ctx, &node->start_mark, LOG_WARNING,
 		      "Expected node with tag \"" YAML_BOOL_TAG
 		      "\", got tag \"%s\"", node->tag);
@@ -445,7 +452,14 @@ config_get_int(config_ctx_t *ctx, yaml_node_t *node, long *dest)
     config_ctx_report(ctx, &node->start_mark, LOG_WARNING,
 		      "Expected scalar node, found %s node", node_type(node));
     return 0;
-  } else if (strcmp((const char *)node->tag, YAML_INT_TAG)) {
+
+  /* The libyaml parser doesn't handle implicit tags, so if an integer
+   * node is not explicitly tagged as integer, we provisionally allow
+   * str tags with a plain style to be substituted.
+   */
+  } else if (strcmp((const char *)node->tag, YAML_INT_TAG) &&
+	     (strcmp((const char *)node->tag, YAML_STR_TAG) ||
+	      node->data.scalar.style != YAML_PLAIN_SCALAR_STYLE)) {
     config_ctx_report(ctx, &node->start_mark, LOG_WARNING,
 		      "Expected node with tag \"" YAML_INT_TAG
 		      "\", got tag \"%s\"", node->tag);
@@ -469,6 +483,11 @@ config_get_int(config_ctx_t *ctx, yaml_node_t *node, long *dest)
   return 1;
 }
 
+/* Determine if a string is a YAML "null" value */
+#define IS_NULL(str)	(!strcmp(str, "") || !strcmp(str, "~") ||	\
+			 !strcmp(str, "null") || !strcmp(str, "Null") || \
+			 !strcmp(str, "NULL"))
+
 int
 config_get_str(config_ctx_t *ctx, yaml_node_t *node, const char **dest,
 	       int allow_null)
@@ -478,7 +497,16 @@ config_get_str(config_ctx_t *ctx, yaml_node_t *node, const char **dest,
     config_ctx_report(ctx, &node->start_mark, LOG_WARNING,
 		      "Expected scalar node, found %s node", node_type(node));
     return 0;
-  } else if (allow_null && !strcmp((const char *)node->tag, YAML_NULL_TAG)) {
+
+  /* The libyaml parser doesn't handle implicit tags, so if a null
+   * node is not explicitly tagged as null, we check if it's a str tag
+   * with a plain style and having one of the accepted "null" values.
+   */
+  } else if (allow_null &&
+	     (!strcmp((const char *)node->tag, YAML_NULL_TAG) ||
+	      (!strcmp((const char *)node->tag, YAML_STR_TAG) &&
+	       node->data.scalar.style == YAML_PLAIN_SCALAR_STYLE &&
+	       IS_NULL((const char *)node->data.scalar.value)))) {
     *dest = 0;
     return 1;
   } else if (strcmp((const char *)node->tag, YAML_STR_TAG)) {
