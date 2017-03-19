@@ -24,5 +24,6 @@ humboldt_SOURCES = \
 	include/common.h \
 	include/configuration.h \
 	include/log.h \
+	src/configuration.c \
 	src/log.c \
 	src/main.c

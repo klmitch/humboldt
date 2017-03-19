@@ -105,4 +105,18 @@ struct _config_s {
  */
 #define CONFIG_FACILITY_FIXED	0x08000000
 
+/** \brief Initialize configuration.
+ *
+ * Initialize the configuration.  This routine parses command line
+ * arguments and reads in the configuration file, placing the results
+ * into a configuration structure for use by the rest of Humboldt.
+ *
+ * \param[in,out]	conf	The configuration structure to
+ *				initialize.
+ * \param[in]		argc	The count of the number of command
+ *				line arguments.
+ * \param[in]		argv	The command line arguments.
+ */
+void initialize_config(config_t *conf, int argc, char **argv);
+
 #endif /* _HUMBOLDT_CONFIGURATION_H */
