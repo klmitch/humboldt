@@ -98,12 +98,11 @@ static struct facility_s facilities[] = {
   {"uucp", LOG_UUCP}
 #endif
 };
-static size_t facility_cnt = CODE_SIZE(facilities);
 
 int
 log_facility(const char *name)
 {
-  int lo = 0, hi = facility_cnt, mid, result;
+  int lo = 0, hi = CODE_SIZE(facilities), mid, result;
 
   /* Implement a binary search */
   for (mid = hi / 2; lo < hi; mid = lo + (hi - lo) / 2) {
