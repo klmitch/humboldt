@@ -31,8 +31,7 @@ struct facility_s {
   const char *f_name;
   int f_val;
 };
-#define CODE_SIZE(list)					\
-  ((sizeof((list)) / sizeof(struct facility_s)) - 1)
+#define CODE_SIZE(list)		(sizeof((list)) / sizeof(struct facility_s))
 
 /* Note: this list must be in the same collation as used by strcmp(),
  * as it will be searched using a binary search.
@@ -96,9 +95,8 @@ static struct facility_s facilities[] = {
   {"user", LOG_USER},
 #endif
 #ifdef LOG_UUCP
-  {"uucp", LOG_UUCP},
+  {"uucp", LOG_UUCP}
 #endif
-  {NULL, -1}
 };
 static size_t facility_cnt = CODE_SIZE(facilities);
 
@@ -136,29 +134,22 @@ log_init(config_t *conf)
 }
 
 void
-log_emit(config_t *conf, int priority, const char *fmt, ...)
+log_vemit(config_t *conf, int priority, const char *fmt, va_list ap)
 {
-  va_list ap;
   FILE *stream;
 
   /* Has the log been initialized? */
   if (conf->cf_flags & CONFIG_LOG_INITIALIZED) {
-    /* Initialize the va_list */
-    va_start(ap, fmt);
-
 #if HAVE_VSYSLOG
     vsyslog(priority, fmt, ap);
 #else
     /* No vsyslog() function, so render to a temporary buffer */
-    char msg_buf[4096];
+    char msg_buf[LOGMSG_BUF];
 
     vsnprintf(msg_buf, sizeof(msg_buf), fmt, ap);
     msg_buf[sizeof(msg_buf) - 1] = '\0';
     syslog(priority, "%s", msg_buf);
 #endif
-
-    /* Clean up the argument list */
-    va_end(ap);
 
     return;
   }
@@ -170,13 +161,17 @@ log_emit(config_t *conf, int priority, const char *fmt, ...)
   /* Select the correct output stream */
   stream = priority <= LOG_WARNING ? stderr : stdout;
 
-  /* Initialize the va_list */
-  va_start(ap, fmt);
-
   /* Emit the log message */
   vfprintf(stream, fmt, ap);
+}
 
-  /* Clean up the argument list */
+void log_emit(config_t *conf, int priority, const char *fmt, ...)
+{
+  va_list ap;
+
+  /* Call log_vemit() */
+  va_start(ap, fmt);
+  log_vemit(conf, priority, fmt, ap);
   va_end(ap);
 }
 

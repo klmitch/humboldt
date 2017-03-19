@@ -17,7 +17,16 @@
 #ifndef _HUMBOLDT_LOG_H
 #define _HUMBOLDT_LOG_H
 
+#include <stdarg.h>		/* for va_list */
+
 #include "configuration.h"	/* for config_t */
+
+/** \brief Message buffer size.
+ *
+ * This macro provides a recommended buffer size for formatting log
+ * messages.
+ */
+#define LOGMSG_BUF		4096
 
 /** \brief Look up a facility name.
  *
@@ -54,9 +63,23 @@ void log_init(config_t *conf);
  * 				The log priority, one of the values
  * 				accepted by syslog().  This must not
  *				be combined with a facility code.
- * \param[in]		format	A format string for the log message.
+ * \param[in]		fmt	A format string for the log message.
  */
-void log_emit(config_t *conf, int priority, const char *format, ...);
+void log_emit(config_t *conf, int priority, const char *fmt, ...);
+
+/** \brief Emit a log message.
+ *
+ * This is a \c stdarg version of log_emit().
+ *
+ * \param[in]		conf	The configuration.
+ * \param[in]		priority
+ * 				The log priority, one of the values
+ * 				accepted by syslog().  This must not
+ *				be combined with a facility code.
+ * \param[in]		fmt	A format string for the log message.
+ * \param[in,out]	ap	The variable arguments pointer.
+ */
+void log_vemit(config_t *conf, int priority, const char *fmt, va_list ap);
 
 /** \brief Reinitialize logging.
  *
