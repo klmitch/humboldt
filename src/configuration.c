@@ -17,10 +17,12 @@
 #include <config.h>
 
 #include <getopt.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <syslog.h>
+#include <yaml.h>
 
 #include "include/configuration.h"
 #include "include/log.h"
@@ -163,6 +165,113 @@ parse_args(config_t *conf, int argc, char **argv)
     fprintf(stderr, "%s: Extraneous trailing arguments\n", conf->cf_prog);
     usage(conf->cf_prog, EXIT_FAILURE);
   }
+}
+
+void
+config_ctx_path_push_key(config_ctx_t *ctx, const char *path)
+{
+  int n;
+
+  if (ctx->cc_pathlen >= PATH_BUF)
+    return; /* Can't add it to the buffer */
+
+  /* Add the path element */
+  if ((n = snprintf(ctx->cc_path + ctx->cc_pathlen, PATH_BUF - ctx->cc_pathlen,
+		    "/%s", path)) > PATH_BUF - ctx->cc_pathlen) {
+    ctx->cc_pathlen = PATH_BUF;
+    ctx->cc_path[PATH_BUF - 1] = '\0';
+  } else
+    ctx->cc_pathlen += n;
+}
+
+void
+config_ctx_path_push_idx(config_ctx_t *ctx, int idx)
+{
+  int n;
+
+  if (ctx->cc_pathlen >= PATH_BUF)
+    return; /* Can't add it to the buffer */
+
+  /* Add the sequence index */
+  if ((n = snprintf(ctx->cc_path + ctx->cc_pathlen, PATH_BUF - ctx->cc_pathlen,
+		    "/[%d]", idx)) > PATH_BUF - ctx->cc_pathlen) {
+    ctx->cc_pathlen = PATH_BUF;
+    ctx->cc_path[PATH_BUF - 1] = '\0';
+  } else
+    ctx->cc_pathlen += n;
+}
+
+void
+config_ctx_path_pop(config_ctx_t *ctx)
+{
+  /* Count back until we get to the beginning or to a '/' */
+  while (ctx->cc_pathlen > 0 && ctx->cc_path[ctx->cc_pathlen] != '/')
+    ctx->cc_pathlen--;
+
+  /* Terminate the string */
+  ctx->cc_path[ctx->cc_pathlen] = '\0';
+}
+
+void
+config_ctx_report(config_ctx_t *ctx, yaml_mark_t *loc, int priority,
+		  const char *fmt, ...)
+{
+  va_list ap;
+  char msgbuf[LOGMSG_BUF];
+  int n;
+
+  /* Begin by formatting the context */
+  n = snprintf(msgbuf, sizeof(msgbuf), "%s[%d]:%s", ctx->cc_filename,
+	       ctx->cc_docnum, ctx->cc_path);
+
+  /* Add the location, if one was provided */
+  if (loc && n < sizeof(msgbuf))
+    n += snprintf(msgbuf + n, sizeof(msgbuf) - n, " (line %d)",
+		  (int)loc->line);
+
+  /* Format the message */
+  if (n < sizeof(msgbuf))
+    msgbuf[n++] = ':';
+  if (n < sizeof(msgbuf))
+    msgbuf[n++] = ' ';
+  if (n < sizeof(msgbuf)) {
+    va_start(ap, fmt);
+    n += vsnprintf(msgbuf + n, sizeof(msgbuf) - n, fmt, ap);
+    va_end(ap);
+  }
+
+  /* Make sure the buffer is terminated */
+  if (n >= sizeof(msgbuf))
+    msgbuf[sizeof(msgbuf) - 1] = '\0';
+
+  log_emit(ctx->cc_conf, priority, "%s", msgbuf);
+}
+
+static void
+process_mapping_key(mapkeys_t *keys, size_t keycnt,
+		    const char *key, void *dest,
+		    config_ctx_t *ctx, yaml_node_t *value,
+		    yaml_mark_t *key_mark)
+{
+  int lo = 0, hi = keycnt, mid, result;
+
+  /* Implement a binary search */
+  for (mid = hi / 2; lo < hi; mid = lo + (hi - lo) / 2) {
+    /* Have we found a match? */
+    if ((result = strcmp(key, keys[mid].mk_key)) == 0) {
+      keys[mid].mk_proc(key, dest, ctx, value);
+      return;
+    }
+
+    /* Is it to the left or right? */
+    if (result < 0)
+      hi = mid;
+    else
+      lo = mid + 1;
+  }
+
+  config_ctx_report(ctx, key_mark, LOG_WARNING,
+		    "Ignoring unknown key \"%s\"", key);
 }
 
 void

@@ -21,6 +21,8 @@
 
 #include "common.h"	/* for magic_t */
 
+#include <yaml.h>
+
 /** \brief Configuration.
  *
  * The Humboldt configuration.  This contains configuration drawn from
@@ -28,6 +30,36 @@
  * file.
  */
 typedef struct _config_s config_t;
+
+/** \brief Configuration file context.
+ *
+ * Represents the configuration file context, describing the file
+ * being processed.
+ */
+typedef struct _config_ctx_s config_ctx_t;
+
+/** \brief Mapping of YAML mapping keys to processors.
+ *
+ * This structure is used while parsing a YAML mapping.  Lists of
+ * these structures map a given key in a YAML mapping to the routine
+ * (a #mapproc_t) required to parse that key.
+ */
+typedef struct _mapkeys_s mapkeys_t;
+
+/** \brief YAML mapping key processor.
+ *
+ * This function pointer describes a YAML mapping key processor.
+ * These routines should process the \p value node and store the value
+ * in an appropriate place in \p dest.
+ *
+ * \param[in]		key	The name of the key.
+ * \param[in,out]	dest	A pointer to the object to contain the
+ *				processed value.
+ * \param[in]		ctx	The configuration processing context.
+ * \param[in]		value	The YAML node containing the value.
+ */
+typedef void (*mapproc_t)(const char *key, void *dest,
+			  config_ctx_t *ctx, yaml_node_t *value);
 
 /** \brief Configuration structure.
  *
@@ -105,6 +137,62 @@ struct _config_s {
  */
 #define CONFIG_FACILITY_FIXED	0x08000000
 
+/** \brief Maximum size of the path buffer.
+ *
+ * This constant sets the size of the path buffer.
+ */
+#define PATH_BUF		1024
+
+/** \brief Configuration file context structure.
+ *
+ * This structure contains the context of the configuration file
+ * reading.  This is used to format comprehensible error messages.
+ */
+struct _config_ctx_s {
+  config_t     *cc_conf;	/**< The configuration */
+  const char   *cc_filename;	/**< Name of the file being processed */
+  int		cc_docnum;	/**< Number of the document in the file */
+  yaml_document_t
+	       *cc_document;	/**< The document being processed */
+  char		cc_path[PATH_BUF];
+				/**< A buffer containing the document path */
+  int		cc_pathlen;	/**< Length of the document path */
+};
+
+/** \brief Initialize a #config_ctx_t.
+ *
+ * Initializes a #config_ctx_t.  The path is initialized to empty.
+ *
+ * \param[in]		conf	The configuration.
+ */
+#define CONFIG_CTX_INIT(conf)	{(conf), 0, 1, 0, '', 0}
+
+/** \brief YAML mapping keys structure.
+ *
+ * This structure contains a YAML mapping.
+ */
+struct _mapkeys_s {
+  const char   *mk_key;		/**< Mapping key value */
+  mapproc_t	mk_proc;	/**< Mapping value processor */
+};
+
+/** \brief Create an entry in a #mapkeys_t list.
+ *
+ * This helper macro declares a key in a #mapkeys_t list.
+ *
+ * \param[in]		key	The name of the key.
+ * \param[in]		proc	The processor function.  Note that
+ *				this is cast to #mapproc_t for
+ *				convenience.
+ */
+#define MAPKEY(key, proc)	{(key), (mapproc_t)(proc)}
+
+/** \brief Count entries in a #mapkeys_t list.
+ *
+ * This macro counts the number of entries in a #mapkeys_t list.
+ */
+#define MAPKEYS_COUNT(list)	(sizeof((list)) / sizeof(mapkeys_t))
+
 /** \brief Initialize configuration.
  *
  * Initialize the configuration.  This routine parses command line
@@ -118,5 +206,51 @@ struct _config_s {
  * \param[in]		argv	The command line arguments.
  */
 void initialize_config(config_t *conf, int argc, char **argv);
+
+/** \brief Push a path element.
+ *
+ * Updates the context to push a new path element, i.e., a mapping key
+ * name.
+ *
+ * \param[in,out]	ctx	The configuration context.
+ * \param[in]		path	The path element to push.
+ */
+void config_ctx_path_push_key(config_ctx_t *ctx, const char *path);
+
+/** \brief Push an index element.
+ *
+ * Updates the context to push a new sequence index.
+ *
+ * \param[in,out]	ctx	The configuration context.
+ * \param[in]		idx	The index to push.
+ */
+void config_ctx_path_push_idx(config_ctx_t *ctx, int idx);
+
+/** \brief Pop a path element.
+ *
+ * Updates the context to pop off a path element, either a mapping key
+ * name or a sequence index.
+ *
+ * \param[in,out]	ctx	The configuration context.
+ */
+void config_ctx_path_pop(config_ctx_t *ctx);
+
+/** \brief Report something related to the configuration.
+ *
+ * This is a wrapper around log_emit() that includes the configuration
+ * context and other location information, such as line number.
+ *
+ * \param[in]		ctx	The configuration context.
+ * \param[in]		loc	The location of the YAML node.
+ *				Optional; pass \c NULL if not
+ *				available.
+ * \param[in]		priority
+ * 				The log priority, one of the values
+ * 				accepted by syslog().  This must not
+ *				be combined with a facility code.
+ * \param[in]		fmt	A format string for the log message.
+ */
+void config_ctx_report(config_ctx_t *ctx, yaml_mark_t *loc, int priority,
+		       const char *fmt, ...);
 
 #endif /* _HUMBOLDT_CONFIGURATION_H */

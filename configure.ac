@@ -38,8 +38,12 @@ AM_INIT_AUTOMAKE
 
 dnl Checks for programs
 AC_PROG_CC_C99
+PKG_PROG_PKG_CONFIG
 
 dnl Checks for libraries
+PKG_CHECK_MODULES([YAML], [yaml-0.1], [], [
+  AC_ERROR([libyaml not found])
+])
 
 dnl Checks for header files
 
