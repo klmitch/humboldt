@@ -36,11 +36,26 @@ AC_CONFIG_MACRO_DIRS([m4])
 AC_CONFIG_LIBOBJ_DIR([lib])
 AM_INIT_AUTOMAKE
 
+dnl Checks for programs
 AC_PROG_CC_C99
 
+dnl Checks for libraries
+
+dnl Checks for header files
+
+dnl Checks for types
+
+dnl Checks for structures
+
+dnl Checks for compiler characteristics
+
+dnl Checks for library functions
 AX_FUNC_GETOPT_LONG
 AC_CHECK_FUNCS([vsyslog])
 
+dnl Checks for system services
+
+dnl Set up outputs
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_FILES([Makefile])
 
