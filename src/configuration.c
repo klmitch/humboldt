@@ -274,6 +274,94 @@ process_mapping_key(mapkeys_t *keys, size_t keycnt,
 		    "Ignoring unknown key \"%s\"", key);
 }
 
+static const char *_node_types[] = {
+  "empty",
+  "scalar",
+  "sequence",
+  "mapping"
+};
+
+static const char *
+node_type(yaml_node_t *node)
+{
+  if (node->type <= YAML_MAPPING_NODE)
+    return _node_types[node->type];
+
+  return "unknown";
+}
+
+void
+config_proc_sequence(config_ctx_t *ctx, yaml_node_t *seq,
+		     itemproc_t proc, void *dest)
+{
+  yaml_node_t *item;
+  yaml_node_item_t *cursor;
+
+  /* Make sure it's what we expect */
+  if (seq->type != YAML_SEQUENCE_NODE) {
+    config_ctx_report(ctx, &seq->start_mark, LOG_WARNING,
+		      "Expected sequence node, found %s node", node_type(seq));
+    return;
+  } else if (strcmp((const char *)seq->tag, YAML_SEQ_TAG)) {
+    config_ctx_report(ctx, &seq->start_mark, LOG_WARNING,
+		      "Expected node with tag \"" YAML_SEQ_TAG
+		      "\", got tag \"%s\"", seq->tag);
+    return;
+  }
+
+  /* Walk the items and call proc */
+  for (cursor = seq->data.sequence.items.start;
+       cursor <= seq->data.sequence.items.top; cursor++) {
+    item = yaml_document_get_node(ctx->cc_document, *cursor);
+    proc(cursor - seq->data.sequence.items.start, dest, ctx, item);
+  }
+}
+
+void
+config_proc_mapping(config_ctx_t *ctx, yaml_node_t *map,
+		    mapkeys_t *keys, size_t keycnt, void *dest)
+{
+  yaml_node_t *key, *value;
+  yaml_node_pair_t *cursor;
+
+  /* Make sure it's what we expect */
+  if (map->type != YAML_MAPPING_NODE) {
+    config_ctx_report(ctx, &map->start_mark, LOG_WARNING,
+		      "Expected mapping node, found %s node", node_type(map));
+    return;
+  } else if (strcmp((const char *)map->tag, YAML_MAP_TAG)) {
+    config_ctx_report(ctx, &map->start_mark, LOG_WARNING,
+		      "Expected node with tag \"" YAML_MAP_TAG
+		      "\", got tag \"%s\"", map->tag);
+    return;
+  }
+
+  /* Walk the pairs and call the appropriate proc */
+  for (cursor = map->data.mapping.pairs.start;
+       cursor <= map->data.mapping.pairs.top; cursor++) {
+    /* Get the key node and make sure it makes sense */
+    key = yaml_document_get_node(ctx->cc_document, cursor->key);
+    if (key->type != YAML_SCALAR_NODE) {
+      config_ctx_report(ctx, &key->start_mark, LOG_WARNING,
+			"Expected scalar key node, found %s node",
+			node_type(key));
+      continue;
+    } else if (strcmp((const char *)key->tag, YAML_STR_TAG)) {
+      config_ctx_report(ctx, &key->start_mark, LOG_WARNING,
+			"Expected key node with tag \"" YAML_STR_TAG
+			"\", got tag \"%s\"", key->tag);
+      continue;
+    }
+
+    /* Now get the value node */
+    value = yaml_document_get_node(ctx->cc_document, cursor->value);
+
+    /* Look up and invoke the processor */
+    process_mapping_key(keys, keycnt, (const char *)key->data.scalar.value,
+			dest, ctx, value, &key->start_mark);
+  }
+}
+
 void
 initialize_config(config_t *conf, int argc, char **argv)
 {

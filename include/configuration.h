@@ -61,6 +61,21 @@ typedef struct _mapkeys_s mapkeys_t;
 typedef void (*mapproc_t)(const char *key, void *dest,
 			  config_ctx_t *ctx, yaml_node_t *value);
 
+/** \brief YAML sequence item processor.
+ *
+ * This function pointer describes a YAML sequence item processor.
+ * These routines should process the \p value node and store the value
+ * in an appropriate place in \p dest.
+ *
+ * \param[in]		idx	The index to process.
+ * \param[in,out]	dest	A pointer to the object to contain the
+ *				processed value.
+ * \param[in]		ctx	The configuration processing context.
+ * \param[in]		value	The YAML node containing the value.
+ */
+typedef void (*itemproc_t)(int idx, void *dest,
+			   config_ctx_t *ctx, yaml_node_t *value);
+
 /** \brief Configuration structure.
  *
  * This structure contains the definition of the configuration.
@@ -252,5 +267,34 @@ void config_ctx_path_pop(config_ctx_t *ctx);
  */
 void config_ctx_report(config_ctx_t *ctx, yaml_mark_t *loc, int priority,
 		       const char *fmt, ...);
+
+/** \brief Process a YAML sequence.
+ *
+ * Process all the nodes in a YAML sequence.
+ *
+ * \param[in]		ctx	The configuration context.
+ * \param[in]		seq	A YAML sequence node.
+ * \param[in]		proc	The processor routine for the items in
+ *				the sequence.
+ * \param[in,out]	dest	A pointer to the object to contain the
+ *				processed value.
+ */
+void config_proc_sequence(config_ctx_t *ctx, yaml_node_t *seq,
+			  itemproc_t proc, void *dest);
+
+/** \brief Process a YAML mapping.
+ *
+ * Process all the keys and values in a YAML mapping.
+ *
+ * \param[in]		ctx	The configuration context.
+ * \param[in]		seq	A YAML sequence node.
+ * \param[in]		keys	A sorted list of #mapkeys_t values
+ *				mapping keys to processors.
+ * \param[in]		keycnt	The number of keys in \p keys.
+ * \param[in,out]	dest	A pointer to the object to contain the
+ *				processed value.
+ */
+void config_proc_mapping(config_ctx_t *ctx, yaml_node_t *map,
+			 mapkeys_t *keys, size_t keycnt, void *dest);
 
 #endif /* _HUMBOLDT_CONFIGURATION_H */
