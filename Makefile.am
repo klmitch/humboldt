@@ -16,6 +16,11 @@ AUTOMAKE_OPTIONS = subdir-objects foreign
 
 EXTRA_DIST = autogen.sh docs lib LICENSE
 
+AM_CPPFLAGS = -DSYSCONFDIR='"$(sysconfdir)"'
+
 bin_PROGRAMS = humboldt
 
-humboldt_SOURCES = src/main.c
+humboldt_SOURCES = \
+	include/common.h \
+	include/configuration.h \
+	src/main.c
