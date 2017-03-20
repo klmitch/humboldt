@@ -73,7 +73,7 @@ yaml_ctx_path_pop(yaml_ctx_t *ctx)
 
 void
 yaml_ctx_report(yaml_ctx_t *ctx, yaml_mark_t *loc, int priority,
-		  const char *fmt, ...)
+		const char *fmt, ...)
 {
   va_list ap;
   char msgbuf[LOGMSG_BUF];
@@ -170,7 +170,7 @@ yaml_proc_sequence(yaml_ctx_t *ctx, yaml_node_t *seq,
 
   /* Walk the items and call proc */
   for (cursor = seq->data.sequence.items.start;
-       cursor <= seq->data.sequence.items.top; cursor++) {
+       cursor < seq->data.sequence.items.top; cursor++) {
     item = yaml_document_get_node(ctx->yc_document, *cursor);
     proc(cursor - seq->data.sequence.items.start, dest, ctx, item);
   }
@@ -197,7 +197,7 @@ yaml_proc_mapping(yaml_ctx_t *ctx, yaml_node_t *map,
 
   /* Walk the pairs and call the appropriate proc */
   for (cursor = map->data.mapping.pairs.start;
-       cursor <= map->data.mapping.pairs.top; cursor++) {
+       cursor < map->data.mapping.pairs.top; cursor++) {
     /* Get the key node and make sure it makes sense */
     key = yaml_document_get_node(ctx->yc_document, cursor->key);
     if (key->type != YAML_SCALAR_NODE) {
