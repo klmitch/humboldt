@@ -225,4 +225,8 @@ initialize_config(config_t *conf, int argc, char **argv)
 
   /* Next, parse command line arguments */
   parse_args(conf, argc, argv);
+
+  /* Read the configuration file */
+  yaml_file_mapping(conf, conf->cf_config, top_level, MAPKEYS_COUNT(top_level),
+		    (void *)conf, 0, 0);
 }

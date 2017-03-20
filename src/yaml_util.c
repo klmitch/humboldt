@@ -20,9 +20,12 @@
 #include <limits.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <syslog.h>
 #include <yaml.h>
 
+#include "include/configuration.h"
 #include "include/log.h"
 #include "include/yaml_util.h"
 
@@ -171,7 +174,7 @@ yaml_proc_sequence(yaml_ctx_t *ctx, yaml_node_t *seq,
   /* Walk the items and call proc */
   for (cursor = seq->data.sequence.items.start;
        cursor < seq->data.sequence.items.top; cursor++) {
-    item = yaml_document_get_node(ctx->yc_document, *cursor);
+    item = yaml_document_get_node(&ctx->yc_document, *cursor);
     proc(cursor - seq->data.sequence.items.start, dest, ctx, item);
   }
 }
@@ -199,7 +202,7 @@ yaml_proc_mapping(yaml_ctx_t *ctx, yaml_node_t *map,
   for (cursor = map->data.mapping.pairs.start;
        cursor < map->data.mapping.pairs.top; cursor++) {
     /* Get the key node and make sure it makes sense */
-    key = yaml_document_get_node(ctx->yc_document, cursor->key);
+    key = yaml_document_get_node(&ctx->yc_document, cursor->key);
     if (key->type != YAML_SCALAR_NODE) {
       yaml_ctx_report(ctx, &key->start_mark, LOG_WARNING,
 		      "Expected scalar key node, found %s node",
@@ -213,7 +216,7 @@ yaml_proc_mapping(yaml_ctx_t *ctx, yaml_node_t *map,
     }
 
     /* Now get the value node */
-    value = yaml_document_get_node(ctx->yc_document, cursor->value);
+    value = yaml_document_get_node(&ctx->yc_document, cursor->value);
 
     /* Look up and invoke the processor */
     process_mapping_key(keys, keycnt, (const char *)key->data.scalar.value,
@@ -374,4 +377,97 @@ yaml_get_str(yaml_ctx_t *ctx, yaml_node_t *node, const char **dest,
 
   *dest = (const char *)node->data.scalar.value;
   return 1;
+}
+
+static const char *_error_types[] = {
+  "No",
+  "Memory",
+  "Reader",
+  "Scanner",
+  "Parser",
+  "Composer",
+  "Writer",
+  "Emitter"
+};
+
+static const char *
+error_type(yaml_error_type_t error)
+{
+  if (error <= YAML_EMITTER_ERROR)
+    return _error_types[error];
+
+  return "Unknown";
+}
+
+static void
+report_parser_error(yaml_ctx_t *ctx, yaml_parser_t *parser)
+{
+  yaml_ctx_report(ctx, &parser->problem_mark, LOG_WARNING,
+		  "%s error parsing file: %s", error_type(parser->error),
+		  parser->problem);
+}
+
+void
+yaml_file_mapping(config_t *conf, const char *filename,
+		  mapkeys_t *keys, size_t keycnt, void *dest,
+		  int all_docs, nextdoc_t nextdoc)
+{
+  yaml_parser_t parser;
+  yaml_ctx_t ctx;
+  yaml_node_t *root;
+  FILE *fp;
+
+  /* Open the YAML file */
+  if (!(fp = fopen(filename, "r")))
+    return;
+
+  /* Initialize the context */
+  ctx.yc_conf = conf;
+  ctx.yc_filename = filename;
+  ctx.yc_docnum = 0;
+  ctx.yc_path[0] = '\0';
+  ctx.yc_pathlen = 0;
+
+  /* Initialize the parser */
+  if (!yaml_parser_initialize(&parser)) {
+    report_parser_error(&ctx, &parser);
+    fclose(fp);
+    return;
+  }
+
+  /* Set it to read from our stream */
+  yaml_parser_set_input_file(&parser, fp);
+
+  /* Read documents from the stream */
+  do {
+    /* Increment the document count */
+    ctx.yc_docnum++;
+
+    /* Load a document from the stream */
+    if (!yaml_parser_load(&parser, &ctx.yc_document)) {
+      report_parser_error(&ctx, &parser);
+      break;
+    }
+
+    /* Get the document's root node */
+    if (!(root = yaml_document_get_root_node(&ctx.yc_document))) {
+      report_parser_error(&ctx, &parser);
+      yaml_document_delete(&ctx.yc_document);
+      break;
+    }
+
+    /* Update dest if necessary */
+    if (nextdoc && ctx.yc_docnum > 1)
+      dest = nextdoc(&ctx, dest);
+
+    /* Process the node as a mapping */
+    yaml_proc_mapping(&ctx, root, keys, keycnt, dest);
+
+    /* Clean up the document */
+    yaml_document_delete(&ctx.yc_document);
+  } while (all_docs);
+
+  /* Clean up after ourselves */
+  yaml_parser_delete(&parser);
+  fclose(fp);
 }

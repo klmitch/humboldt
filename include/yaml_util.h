@@ -17,6 +17,7 @@
 #ifndef _HUMBOLDT_YAML_UTIL_H
 #define _HUMBOLDT_YAML_UTIL_H
 
+#include <stdlib.h>		/* for size_t */
 #include <yaml.h>
 
 #include "configuration.h"	/* for config_t */
@@ -66,6 +67,20 @@ typedef void (*mapproc_t)(const char *key, void *dest,
 typedef void (*itemproc_t)(int idx, void *dest,
 			   yaml_ctx_t *ctx, yaml_node_t *value);
 
+/** \brief Next document callback.
+ *
+ * This function pointer describes a function to call if subsequent
+ * documents are read from a YAML file.  The function should return a
+ * new pointer for \c dest.
+ *
+ * \param[in]		ctx	The YAML file context.
+ * \param[in]		orig	The original value of the \c dest
+ *				parameter.
+ *
+ * \return	The new value for \c dest.
+ */
+typedef void *(*nextdoc_t)(yaml_ctx_t *ctx, void *orig);
+
 /** \brief Maximum size of the path buffer.
  *
  * This constant sets the size of the path buffer.
@@ -82,19 +97,11 @@ struct _yaml_ctx_s {
   const char   *yc_filename;	/**< Name of the file being processed */
   int		yc_docnum;	/**< Number of the document in the file */
   yaml_document_t
-	       *yc_document;	/**< The document being processed */
+		yc_document;	/**< The document being processed */
   char		yc_path[PATH_BUF];
 				/**< A buffer containing the document path */
   int		yc_pathlen;	/**< Length of the document path */
 };
-
-/** \brief Initialize a #yaml_ctx_t.
- *
- * Initializes a #yaml_ctx_t.  The path is initialized to empty.
- *
- * \param[in]		conf	The configuration.
- */
-#define YAML_CTX_INIT(conf)	{(conf), 0, 0, 0, '', 0}
 
 /** \brief YAML mapping keys structure.
  *
@@ -238,5 +245,34 @@ int yaml_get_int(yaml_ctx_t *ctx, yaml_node_t *node, long *dest);
  */
 int yaml_get_str(yaml_ctx_t *ctx, yaml_node_t *node, const char **dest,
 		 int allow_null);
+
+/** \brief Read a mapping from a named file.
+ *
+ * This function reads one or more mappings from a named file.
+ *
+ * \param[in]		conf	The configuration.
+ * \param[in]		filename
+ *				The name of the file to read.
+ * \param[in]		keys	A sorted list of #mapkeys_t values
+ *				mapping keys to processors.
+ * \param[in]		keycnt	The number of keys in \p keys.
+ * \param[in,out]	dest	A pointer to the object to contain the
+ *				processed value.
+ * \param[in]		all_docs
+ *				If true, all documents will be read
+ *				from the file; otherwise, only the
+ *				first document will be read.
+ * \param[in]		nextdoc	A pointer to a function to call on
+ *				second and subsequent documents; the
+ *				function return value will be used as
+ *				\p dest for those subsequent
+ *				documents.  May be passed as \c NULL
+ *				if \p dest does not need to be updated
+ *				between documents.  Ignored if \p
+ *				all_docs is false.
+ */
+void yaml_file_mapping(config_t *conf, const char *filename,
+		       mapkeys_t *keys, size_t keycnt, void *dest,
+		       int all_docs, nextdoc_t nextdoc);
 
 #endif /* _HUMBOLDT_YAML_UTIL_H */
