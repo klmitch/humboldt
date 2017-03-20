@@ -107,7 +107,7 @@ log_facility(const char *name)
   /* Implement a binary search */
   for (mid = hi / 2; lo < hi; mid = lo + (hi - lo) / 2) {
     /* Found a match! */
-    if ((result = strcmp(name, facilities[mid].f_name)) == 0)
+    if (!(result = strcmp(name, facilities[mid].f_name)))
       return facilities[mid].f_val;
 
     /* Is it to the left or right? */

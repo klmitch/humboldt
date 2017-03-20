@@ -117,7 +117,7 @@ process_mapping_key(mapkeys_t *keys, size_t keycnt,
   /* Implement a binary search */
   for (mid = hi / 2; lo < hi; mid = lo + (hi - lo) / 2) {
     /* Have we found a match? */
-    if ((result = strcmp(key, keys[mid].mk_key)) == 0) {
+    if (!(result = strcmp(key, keys[mid].mk_key))) {
       keys[mid].mk_proc(key, dest, ctx, value);
       return;
     }
@@ -278,8 +278,8 @@ yaml_get_bool(yaml_ctx_t *ctx, yaml_node_t *node, int *dest)
 
   for (mid = hi / 2; lo < hi; mid = lo + (hi - lo) / 2) {
     /* Have we found a match? */
-    if ((result = strcmp((const char *)node->data.scalar.value,
-			 booleans[mid].text))) {
+    if (!(result = strcmp((const char *)node->data.scalar.value,
+			  booleans[mid].text))) {
       *dest = booleans[mid].value;
       return 1;
     }
