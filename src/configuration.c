@@ -16,11 +16,7 @@
 
 #include <config.h>
 
-#include <errno.h>
 #include <getopt.h>
-#include <limits.h>
-#include <stdarg.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -29,6 +25,7 @@
 
 #include "include/configuration.h"
 #include "include/log.h"
+#include "include/yaml_util.h"
 
 /* Recognized short options */
 static const char *opt_str = "c:dDf:hv";
@@ -170,355 +167,50 @@ parse_args(config_t *conf, int argc, char **argv)
   }
 }
 
-void
-config_ctx_path_push_key(config_ctx_t *ctx, const char *path)
+static void
+proc_debug(const char *key, config_t *conf, yaml_ctx_t *ctx,
+	   yaml_node_t *value)
 {
-  int n;
+  int debug;
 
-  if (ctx->cc_pathlen >= PATH_BUF)
-    return; /* Can't add it to the buffer */
+  /* Convert the value as boolean */
+  if (yaml_get_bool(ctx, value, &debug) &&
+      !(conf->cf_flags & CONFIG_DEBUG_FIXED))
+    switch (debug) {
+    case 1:
+      conf->cf_flags |= CONFIG_DEBUG;
+      break;
 
-  /* Add the path element */
-  if ((n = snprintf(ctx->cc_path + ctx->cc_pathlen, PATH_BUF - ctx->cc_pathlen,
-		    "/%s", path)) > PATH_BUF - ctx->cc_pathlen) {
-    ctx->cc_pathlen = PATH_BUF;
-    ctx->cc_path[PATH_BUF - 1] = '\0';
-  } else
-    ctx->cc_pathlen += n;
-}
+    case 0:
+      conf->cf_flags &= ~CONFIG_DEBUG;
+      break;
 
-void
-config_ctx_path_push_idx(config_ctx_t *ctx, int idx)
-{
-  int n;
-
-  if (ctx->cc_pathlen >= PATH_BUF)
-    return; /* Can't add it to the buffer */
-
-  /* Add the sequence index */
-  if ((n = snprintf(ctx->cc_path + ctx->cc_pathlen, PATH_BUF - ctx->cc_pathlen,
-		    "/[%d]", idx)) > PATH_BUF - ctx->cc_pathlen) {
-    ctx->cc_pathlen = PATH_BUF;
-    ctx->cc_path[PATH_BUF - 1] = '\0';
-  } else
-    ctx->cc_pathlen += n;
-}
-
-void
-config_ctx_path_pop(config_ctx_t *ctx)
-{
-  /* Count back until we get to the beginning or to a '/' */
-  while (ctx->cc_pathlen > 0 && ctx->cc_path[ctx->cc_pathlen] != '/')
-    ctx->cc_pathlen--;
-
-  /* Terminate the string */
-  ctx->cc_path[ctx->cc_pathlen] = '\0';
-}
-
-void
-config_ctx_report(config_ctx_t *ctx, yaml_mark_t *loc, int priority,
-		  const char *fmt, ...)
-{
-  va_list ap;
-  char msgbuf[LOGMSG_BUF];
-  int n;
-
-  /* Begin by formatting the context */
-  n = snprintf(msgbuf, sizeof(msgbuf), "%s[%d]:%s", ctx->cc_filename,
-	       ctx->cc_docnum, ctx->cc_path);
-
-  /* Add the location, if one was provided */
-  if (loc && n < sizeof(msgbuf))
-    n += snprintf(msgbuf + n, sizeof(msgbuf) - n, " (line %d)",
-		  (int)loc->line);
-
-  /* Format the message */
-  if (n < sizeof(msgbuf))
-    msgbuf[n++] = ':';
-  if (n < sizeof(msgbuf))
-    msgbuf[n++] = ' ';
-  if (n < sizeof(msgbuf)) {
-    va_start(ap, fmt);
-    n += vsnprintf(msgbuf + n, sizeof(msgbuf) - n, fmt, ap);
-    va_end(ap);
-  }
-
-  /* Make sure the buffer is terminated */
-  if (n >= sizeof(msgbuf))
-    msgbuf[sizeof(msgbuf) - 1] = '\0';
-
-  log_emit(ctx->cc_conf, priority, "%s", msgbuf);
+    default:
+      break;
+    }
 }
 
 static void
-process_mapping_key(mapkeys_t *keys, size_t keycnt,
-		    const char *key, void *dest,
-		    config_ctx_t *ctx, yaml_node_t *value,
-		    yaml_mark_t *key_mark)
+proc_facility(const char *key, config_t *conf, yaml_ctx_t *ctx,
+              yaml_node_t *value)
 {
-  int lo = 0, hi = keycnt, mid, result;
+  const char *name;
+  int facility;
 
-  /* Implement a binary search */
-  for (mid = hi / 2; lo < hi; mid = lo + (hi - lo) / 2) {
-    /* Have we found a match? */
-    if ((result = strcmp(key, keys[mid].mk_key)) == 0) {
-      keys[mid].mk_proc(key, dest, ctx, value);
-      return;
-    }
-
-    /* Is it to the left or right? */
-    if (result < 0)
-      hi = mid;
-    else
-      lo = mid + 1;
+  /* Convert the value as a string */
+  if (yaml_get_str(ctx, value, &name, 0)) {
+    if ((facility = log_facility(name)) < 0)
+      yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
+			"Unrecognized facility name \"%s\"", name);
+    else if (!(conf->cf_flags & CONFIG_FACILITY_FIXED))
+      conf->cf_facility = facility;
   }
-
-  config_ctx_report(ctx, key_mark, LOG_WARNING,
-		    "Ignoring unknown key \"%s\"", key);
 }
 
-static const char *_node_types[] = {
-  "empty",
-  "scalar",
-  "sequence",
-  "mapping"
+static mapkeys_t top_level[] = {
+  MAPKEY("debug", proc_debug),
+  MAPKEY("facility", proc_facility)
 };
-
-static const char *
-node_type(yaml_node_t *node)
-{
-  if (node->type <= YAML_MAPPING_NODE)
-    return _node_types[node->type];
-
-  return "unknown";
-}
-
-void
-config_proc_sequence(config_ctx_t *ctx, yaml_node_t *seq,
-		     itemproc_t proc, void *dest)
-{
-  yaml_node_t *item;
-  yaml_node_item_t *cursor;
-
-  /* Make sure it's what we expect */
-  if (seq->type != YAML_SEQUENCE_NODE) {
-    config_ctx_report(ctx, &seq->start_mark, LOG_WARNING,
-		      "Expected sequence node, found %s node", node_type(seq));
-    return;
-  } else if (strcmp((const char *)seq->tag, YAML_SEQ_TAG)) {
-    config_ctx_report(ctx, &seq->start_mark, LOG_WARNING,
-		      "Expected node with tag \"" YAML_SEQ_TAG
-		      "\", got tag \"%s\"", seq->tag);
-    return;
-  }
-
-  /* Walk the items and call proc */
-  for (cursor = seq->data.sequence.items.start;
-       cursor <= seq->data.sequence.items.top; cursor++) {
-    item = yaml_document_get_node(ctx->cc_document, *cursor);
-    proc(cursor - seq->data.sequence.items.start, dest, ctx, item);
-  }
-}
-
-void
-config_proc_mapping(config_ctx_t *ctx, yaml_node_t *map,
-		    mapkeys_t *keys, size_t keycnt, void *dest)
-{
-  yaml_node_t *key, *value;
-  yaml_node_pair_t *cursor;
-
-  /* Make sure it's what we expect */
-  if (map->type != YAML_MAPPING_NODE) {
-    config_ctx_report(ctx, &map->start_mark, LOG_WARNING,
-		      "Expected mapping node, found %s node", node_type(map));
-    return;
-  } else if (strcmp((const char *)map->tag, YAML_MAP_TAG)) {
-    config_ctx_report(ctx, &map->start_mark, LOG_WARNING,
-		      "Expected node with tag \"" YAML_MAP_TAG
-		      "\", got tag \"%s\"", map->tag);
-    return;
-  }
-
-  /* Walk the pairs and call the appropriate proc */
-  for (cursor = map->data.mapping.pairs.start;
-       cursor <= map->data.mapping.pairs.top; cursor++) {
-    /* Get the key node and make sure it makes sense */
-    key = yaml_document_get_node(ctx->cc_document, cursor->key);
-    if (key->type != YAML_SCALAR_NODE) {
-      config_ctx_report(ctx, &key->start_mark, LOG_WARNING,
-			"Expected scalar key node, found %s node",
-			node_type(key));
-      continue;
-    } else if (strcmp((const char *)key->tag, YAML_STR_TAG)) {
-      config_ctx_report(ctx, &key->start_mark, LOG_WARNING,
-			"Expected key node with tag \"" YAML_STR_TAG
-			"\", got tag \"%s\"", key->tag);
-      continue;
-    }
-
-    /* Now get the value node */
-    value = yaml_document_get_node(ctx->cc_document, cursor->value);
-
-    /* Look up and invoke the processor */
-    process_mapping_key(keys, keycnt, (const char *)key->data.scalar.value,
-			dest, ctx, value, &key->start_mark);
-  }
-}
-
-struct boolean_s {
-  const char *text;
-  int value;
-};
-#define BOOLEAN_SIZE(list)	(sizeof((list)) / sizeof(struct boolean_s))
-
-static struct boolean_s booleans[] = {
-  {"FALSE", 0},
-  {"False", 0},
-  {"N", 0},
-  {"NO", 0},
-  {"No", 0},
-  {"OFF", 0},
-  {"ON", 1},
-  {"Off", 0},
-  {"On", 1},
-  {"TRUE", 1},
-  {"True", 1},
-  {"Y", 1},
-  {"YES", 1},
-  {"Yes", 1},
-  {"false", 0},
-  {"n", 0},
-  {"no", 0},
-  {"off", 0},
-  {"on", 1},
-  {"true", 1},
-  {"y", 1},
-  {"yes", 1}
-};
-
-int
-config_get_bool(config_ctx_t *ctx, yaml_node_t *node, int *dest)
-{
-  int lo = 0, hi = BOOLEAN_SIZE(booleans), mid, result;
-
-  /* Sanity-check the node */
-  if (node->type != YAML_SCALAR_NODE) {
-    config_ctx_report(ctx, &node->start_mark, LOG_WARNING,
-		      "Expected scalar node, found %s node", node_type(node));
-    return 0;
-
-  /* The libyaml parser doesn't handle implicit tags, so if a boolean
-   * node is not explicitly tagged as boolean, we provisionally allow
-   * str tags with a plain style to be substituted.
-   */
-  } else if (strcmp((const char *)node->tag, YAML_BOOL_TAG) &&
-	     (strcmp((const char *)node->tag, YAML_STR_TAG) ||
-	      node->data.scalar.style != YAML_PLAIN_SCALAR_STYLE)) {
-    config_ctx_report(ctx, &node->start_mark, LOG_WARNING,
-		      "Expected node with tag \"" YAML_BOOL_TAG
-		      "\", got tag \"%s\"", node->tag);
-    return 0;
-  }
-
-  for (mid = hi / 2; lo < hi; mid = lo + (hi - lo) / 2) {
-    /* Have we found a match? */
-    if ((result = strcmp((const char *)node->data.scalar.value,
-			 booleans[mid].text))) {
-      *dest = booleans[mid].value;
-      return 1;
-    }
-
-    /* Is it to the left or right? */
-    if (result < 0)
-      hi = mid;
-    else
-      lo = mid + 1;
-  }
-
-  /* Incomprehensible value */
-  config_ctx_report(ctx, &node->start_mark, LOG_WARNING,
-		    "Invalid boolean value \"%s\"", node->data.scalar.value);
-  return 0;
-}
-
-int
-config_get_int(config_ctx_t *ctx, yaml_node_t *node, long *dest)
-{
-  long tmp;
-  char *end;
-
-  /* Sanity-check the node */
-  if (node->type != YAML_SCALAR_NODE) {
-    config_ctx_report(ctx, &node->start_mark, LOG_WARNING,
-		      "Expected scalar node, found %s node", node_type(node));
-    return 0;
-
-  /* The libyaml parser doesn't handle implicit tags, so if an integer
-   * node is not explicitly tagged as integer, we provisionally allow
-   * str tags with a plain style to be substituted.
-   */
-  } else if (strcmp((const char *)node->tag, YAML_INT_TAG) &&
-	     (strcmp((const char *)node->tag, YAML_STR_TAG) ||
-	      node->data.scalar.style != YAML_PLAIN_SCALAR_STYLE)) {
-    config_ctx_report(ctx, &node->start_mark, LOG_WARNING,
-		      "Expected node with tag \"" YAML_INT_TAG
-		      "\", got tag \"%s\"", node->tag);
-    return 0;
-  }
-
-  errno = 0; /* reset errno value */
-  tmp = strtol((const char *)node->data.scalar.value, &end, 0);
-
-  if (*end != '\0') {
-    config_ctx_report(ctx, &node->start_mark, LOG_WARNING,
-		      "Invalid integer \"%s\"", node->data.scalar.value);
-    return 0;
-  } else if ((tmp == LONG_MIN || tmp == LONG_MAX) && errno == ERANGE) {
-    config_ctx_report(ctx, &node->start_mark, LOG_WARNING,
-		      "Integer %sflow", tmp < 0 ? "under" : "over");
-    return 0;
-  }
-
-  *dest = tmp;
-  return 1;
-}
-
-/* Determine if a string is a YAML "null" value */
-#define IS_NULL(str)	(!strcmp(str, "") || !strcmp(str, "~") ||	\
-			 !strcmp(str, "null") || !strcmp(str, "Null") || \
-			 !strcmp(str, "NULL"))
-
-int
-config_get_str(config_ctx_t *ctx, yaml_node_t *node, const char **dest,
-	       int allow_null)
-{
-  /* Sanity-check the node */
-  if (node->type != YAML_SCALAR_NODE) {
-    config_ctx_report(ctx, &node->start_mark, LOG_WARNING,
-		      "Expected scalar node, found %s node", node_type(node));
-    return 0;
-
-  /* The libyaml parser doesn't handle implicit tags, so if a null
-   * node is not explicitly tagged as null, we check if it's a str tag
-   * with a plain style and having one of the accepted "null" values.
-   */
-  } else if (allow_null &&
-	     (!strcmp((const char *)node->tag, YAML_NULL_TAG) ||
-	      (!strcmp((const char *)node->tag, YAML_STR_TAG) &&
-	       node->data.scalar.style == YAML_PLAIN_SCALAR_STYLE &&
-	       IS_NULL((const char *)node->data.scalar.value)))) {
-    *dest = 0;
-    return 1;
-  } else if (strcmp((const char *)node->tag, YAML_STR_TAG)) {
-    config_ctx_report(ctx, &node->start_mark, LOG_WARNING,
-		      "Expected node with tag \"" YAML_STR_TAG
-		      "\", got tag \"%s\"", node->tag);
-    return 0;
-  }
-
-  *dest = (const char *)node->data.scalar.value;
-  return 1;
-}
 
 void
 initialize_config(config_t *conf, int argc, char **argv)
