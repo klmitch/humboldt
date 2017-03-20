@@ -162,6 +162,8 @@ log_vemit(config_t *conf, int priority, const char *fmt, va_list ap)
 
   /* Emit the log message */
   vfprintf(stream, fmt, ap);
+  fputc('\n', stream);
+  fflush(stream);
 }
 
 void log_emit(config_t *conf, int priority, const char *fmt, ...)
