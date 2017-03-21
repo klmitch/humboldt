@@ -21,10 +21,12 @@ AM_CPPFLAGS = -DSYSCONFDIR='"$(sysconfdir)"'
 bin_PROGRAMS = humboldt
 
 humboldt_SOURCES = \
+	include/alloc.h \
 	include/common.h \
 	include/configuration.h \
 	include/log.h \
 	include/yaml_util.h \
+	src/alloc.c \
 	src/configuration.c \
 	src/log.c \
 	src/main.c \

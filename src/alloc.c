@@ -79,3 +79,39 @@ wipe(freelist_t *freelist)
   freelist->fl_count = 0;
   freelist->fl_freelist = 0;
 }
+
+void *
+flexlist_append(flexlist_t *fx)
+{
+  common_verify(fx, FLEXLIST_MAGIC);
+
+  /* Do we need to allocate more items? */
+  if (fx->fx_count + 1 >= fx->fx_capacity) {
+    int new_capacity = fx->fx_capacity ? fx->fx_capacity << 1 : 1;
+    char *new_contents;
+
+    if (!(new_contents = realloc(fx->fx_contents, fx->fx_size * new_capacity)))
+      return 0;
+
+    fx->fx_capacity = new_capacity;
+    fx->fx_contents = new_contents;
+  }
+
+  /* Return a pointer to a new item */
+  return flexlist_item(fx, fx->fx_count++);
+}
+
+void
+flexlist_release(flexlist_t *fx)
+{
+  common_verify(fx, FLEXLIST_MAGIC);
+
+  /* Release memory */
+  if (fx->fx_contents)
+    free(fx->fx_contents);
+
+  /* Reset the list */
+  fx->fx_count = 0;
+  fx->fx_capacity = 0;
+  fx->fx_contents = 0;
+}

@@ -35,6 +35,12 @@ typedef struct _freelist_s freelist_t;
  */
 typedef struct _freeitem_s _freeitem_t;
 
+/** \brief Flexible list.
+ *
+ * Represent a flexible list that grows dynamically.
+ */
+typedef struct _flexlist_s flexlist_t;
+
 /** \brief Free list structure.
  *
  * This structure contains the definition of the free list head.
@@ -100,6 +106,93 @@ struct _freeitem_s {
   _freeitem_t  *fi_next;	/**< Next element on the freelist */
 };
 
+/** \brief Flexible list structure.
+ *
+ * This structure contains the definition of a flexible list.  The
+ * flexible list is initialized with the size of a type, and elements
+ * may be queried from it.
+ */
+struct _flexlist_s {
+  magic_t	fx_magic;	/**< Magic number */
+  int		fx_count;	/**< Number of items in the list */
+  int		fx_capacity;	/**< Total capacity of the list */
+  size_t	fx_size;	/**< Size of an item */
+  char	       *fx_contents;	/**< Contents of the list */
+};
+
+/** \brief Flexible list magic number.
+ *
+ * This is the magic number used for the flexible list structure.  It
+ * is used to guard against programming problems, such as failure to
+ * initialize a flexible list.
+ */
+#define FLEXLIST_MAGIC 0x775f243e
+
+/** \brief Initialize a flexible list.
+ *
+ * Initialize a flexible list.  This is a static initializer that
+ * ensures that the flexible list is properly initialized.
+ *
+ * \param[in]		type	The type the flexible list contains.
+ */
+#define FLEXLIST_INIT(type)	{FLEXLIST_MAGIC, 0, 0, sizeof(type), 0}
+
+/** \brief Initialize a flexible list.
+ *
+ * Initialize a flexible list.  This differs from FLEXLIST_INIT() in
+ * that this macro is designed for initializing dynamically allocated
+ * memory.
+ *
+ * \param[in,out]	obj	A pointer to the flexible list.
+ * \param[in]		type	The type the flexible list contains.
+ */
+#define flexlist_init(obj, type)		\
+  do {						\
+    flexlist_t *_fx = (obj);			\
+    _fx->fx_count = 0;				\
+    _fx->fx_capacity = 0;			\
+    _fx->fx_size = sizeof(type);		\
+    _fx->fx_contents = 0;			\
+    _fx->fx_magic = FLEXLIST_MAGIC;		\
+  } while (0)
+
+/** \brief Determine the number of items in the list.
+ *
+ * Returns the number of items contained in the flexible list.
+ *
+ * \param[in]		obj	A pointer to the flexible list.
+ *
+ * \return	The number of items in the flexible list.
+ */
+#define flexlist_count(obj)	((obj)->fx_count)
+
+/** \brief Determine memory consumed by the flexible list.
+ *
+ * Returns the amount of memory in use for representing the flexible
+ * list.
+ *
+ * \param[in]		obj	A pointer to the flexible list.
+ *
+ * \return	The total amount of memory consumed by the flexible
+ *		list.
+ */
+#define flexlist_allocated(obj)	((obj)->fx_capacity * (obj)->fx_size)
+
+/** \brief Retrieve an item from a flexible list.
+ *
+ * Retrieve a specified item from the flexible list.  Note that this
+ * macro performs no bounds checking.
+ *
+ * \param[in]		obj	A pointer to the flexible list.
+ * \param[in]		i	The index of the item to retrieve.
+ *
+ * \return	A pointer to \c void containing the retrieved item.
+ *		Note that this will need to be cast to the appropriate
+ *		type.
+ */
+#define flexlist_item(obj, i)	((void *)((obj)->fx_contents +		\
+					  (obj)->fx_size * (i)))
+
 /** \brief Allocate an item.
  *
  * Allocate an item based on the definition of the free list head.
@@ -136,5 +229,27 @@ void release(freelist_t *freelist, void *item);
  * 				A pointer to the free list head.
  */
 void wipe(freelist_t *freelist);
+
+/** \brief Append an item to a flexible list.
+ *
+ * Extends the flexible list by one item.
+ *
+ * \param[in,out]	fx	A pointer to the flexible list.
+ *
+ * \return	A pointer to \c void containing the uninitialized item
+ *		added to the flexible list.  Note that this will need
+ *		to be cast to the appropriate type.  May return \c
+ *		NULL if no more memory can be allocated.
+ */
+void *flexlist_append(flexlist_t *fx);
+
+/** \brief Release a flexible list.
+ *
+ * Release all memory consumed by a flexible list.  After being
+ * called, the flexible list will be empty.
+ *
+ * \param[in,out]	fx	A pointer to the flexible list.
+ */
+void flexlist_release(flexlist_t *fx);
 
 #endif /* _HUMBOLDT_ALLOC_H */
