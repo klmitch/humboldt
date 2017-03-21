@@ -17,6 +17,7 @@
 #ifndef _HUMBOLDT_CONFIGURATION_H
 #define _HUMBOLDT_CONFIGURATION_H
 
+#include <stdint.h>	/* for uint32_t */
 #include <syslog.h>	/* for LOG_DAEMON */
 
 #include "common.h"	/* for magic_t */

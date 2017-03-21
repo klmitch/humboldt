@@ -23,6 +23,7 @@
 #include <syslog.h>
 #include <yaml.h>
 
+#include "include/common.h"
 #include "include/configuration.h"
 #include "include/log.h"
 #include "include/yaml_util.h"
@@ -71,6 +72,8 @@ static void
 parse_args(config_t *conf, int argc, char **argv)
 {
   int c;
+
+  common_verify(conf, CONFIG_MAGIC);
 
   while ((c = getopt_long(argc, argv, opt_str, opts, 0)) >= 0)
     switch (c) {
@@ -173,6 +176,8 @@ proc_debug(const char *key, config_t *conf, yaml_ctx_t *ctx,
 {
   int debug;
 
+  common_verify(conf, CONFIG_MAGIC);
+
   /* Convert the value as boolean */
   if (yaml_get_bool(ctx, value, &debug) &&
       !(conf->cf_flags & CONFIG_DEBUG_FIXED))
@@ -197,6 +202,8 @@ proc_facility(const char *key, config_t *conf, yaml_ctx_t *ctx,
   const char *name;
   int facility;
 
+  common_verify(conf, CONFIG_MAGIC);
+
   /* Convert the value as a string */
   if (yaml_get_str(ctx, value, &name, 0)) {
     if ((facility = log_facility(name)) < 0)
@@ -216,6 +223,8 @@ void
 initialize_config(config_t *conf, int argc, char **argv)
 {
   const char *tmp;
+
+  common_verify(conf, CONFIG_MAGIC);
 
   /* Begin by filling in the program name */
   if ((tmp = strrchr(argv[0], '/')))

@@ -25,6 +25,7 @@
 #include <syslog.h>
 #include <yaml.h>
 
+#include "include/common.h"
 #include "include/configuration.h"
 #include "include/log.h"
 #include "include/yaml_util.h"
@@ -416,6 +417,8 @@ yaml_file_mapping(config_t *conf, const char *filename,
   yaml_ctx_t ctx;
   yaml_node_t *root;
   FILE *fp;
+
+  common_verify(conf, CONFIG_MAGIC);
 
   /* Open the YAML file */
   if (!(fp = fopen(filename, "r")))
