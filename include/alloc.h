@@ -97,7 +97,7 @@ struct _freelist_s {
  * is a convenience structure for threading the free list.
  */
 struct _freeitem_s {
-  freeitem_t   *fi_next;	/**< Next element on the freelist */
+  _freeitem_t  *fi_next;	/**< Next element on the freelist */
 };
 
 /** \brief Allocate an item.

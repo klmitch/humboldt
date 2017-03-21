@@ -16,15 +16,15 @@
 
 #include <stdlib.h>
 
-#include "alloc.h"
-#include "common.h"
+#include "include/alloc.h"
+#include "include/common.h"
 
 void *
 alloc(freelist_t *freelist)
 {
   void *result;
 
-  common_verify(freelist, FREELIST_MAGIC)
+  common_verify(freelist, FREELIST_MAGIC);
 
   /* Check to see if there's something on the free list */
   if ((result = freelist->fl_freelist)) {
@@ -39,7 +39,7 @@ alloc(freelist_t *freelist)
       freelist->fl_alloc++;
   }
 
-  return result
+  return result;
 }
 
 void
@@ -47,7 +47,7 @@ release(freelist_t *freelist, void *item)
 {
   _freeitem_t *freeitem = (_freeitem_t *)item;
 
-  common_verify(freelist, FREELIST_MAGIC)
+  common_verify(freelist, FREELIST_MAGIC);
 
   /* Check to see which flavor of release we need */
   if (freelist->fl_max && freelist->fl_count >= freelist->fl_max) {
@@ -65,9 +65,9 @@ release(freelist_t *freelist, void *item)
 void
 wipe(freelist_t *freelist)
 {
-  freeitem_t *item, *next;
+  _freeitem_t *item, *next;
 
-  common_verify(freelist, FREELIST_MAGIC)
+  common_verify(freelist, FREELIST_MAGIC);
 
   /* Walk the free list and free each item */
   for (item = freelist->fl_freelist, next = freelist->fl_freelist->fi_next;
