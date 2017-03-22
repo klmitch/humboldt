@@ -110,31 +110,29 @@ yaml_ctx_report(yaml_ctx_t *ctx, yaml_mark_t *loc, int priority,
   log_emit(ctx->yc_conf, priority, "%s", msgbuf);
 }
 
+static int
+mapping_key_compare(const char *key, const mapkeys_t *member)
+{
+  return strcmp(key, member->mk_key);
+}
+
 static void
 process_mapping_key(mapkeys_t *keys, size_t keycnt,
 		    const char *key, void *dest,
 		    yaml_ctx_t *ctx, yaml_node_t *value,
 		    yaml_mark_t *key_mark)
 {
-  int lo = 0, hi = keycnt, mid, result;
+  mapkeys_t *result;
 
-  /* Implement a binary search */
-  for (mid = hi / 2; lo < hi; mid = lo + (hi - lo) / 2) {
-    /* Have we found a match? */
-    if (!(result = strcmp(key, keys[mid].mk_key))) {
-      keys[mid].mk_proc(key, dest, ctx, value);
-      return;
-    }
-
-    /* Is it to the left or right? */
-    if (result < 0)
-      hi = mid;
-    else
-      lo = mid + 1;
+  if (!(result = (mapkeys_t *)bsearch((const void *)key, (const void *)keys,
+				      keycnt, sizeof(mapkeys_t),
+				      (compare_t)mapping_key_compare))) {
+    yaml_ctx_report(ctx, key_mark, LOG_WARNING,
+		    "Ignoring unknown key \"%s\"", key);
+    return;
   }
 
-  yaml_ctx_report(ctx, key_mark, LOG_WARNING,
-		  "Ignoring unknown key \"%s\"", key);
+  result->mk_proc(key, dest, ctx, value);
 }
 
 static const char *_node_types[] = {
@@ -256,10 +254,16 @@ static struct boolean_s booleans[] = {
   {"yes", 1}
 };
 
+static int
+boolean_compare(const char *text, const struct boolean_s *member)
+{
+  return strcmp(text, member->text);
+}
+
 int
 yaml_get_bool(yaml_ctx_t *ctx, yaml_node_t *node, int *dest)
 {
-  int lo = 0, hi = BOOLEAN_SIZE(booleans), mid, result;
+  const struct boolean_s *result;
 
   /* Sanity-check the node */
   if (node->type != YAML_SCALAR_NODE) {
@@ -280,25 +284,21 @@ yaml_get_bool(yaml_ctx_t *ctx, yaml_node_t *node, int *dest)
     return 0;
   }
 
-  for (mid = hi / 2; lo < hi; mid = lo + (hi - lo) / 2) {
-    /* Have we found a match? */
-    if (!(result = strcmp((const char *)node->data.scalar.value,
-			  booleans[mid].text))) {
-      *dest = booleans[mid].value;
-      return 1;
-    }
+  if (!(result =
+	(struct boolean_s *)bsearch((const void *)node->data.scalar.value,
+				    (const void *)booleans,
+				    BOOLEAN_SIZE(booleans),
+				    sizeof(struct boolean_s),
+				    (compare_t)boolean_compare))) {
 
-    /* Is it to the left or right? */
-    if (result < 0)
-      hi = mid;
-    else
-      lo = mid + 1;
+    /* Incomprehensible value */
+    yaml_ctx_report(ctx, &node->start_mark, LOG_WARNING,
+		    "Invalid boolean value \"%s\"", node->data.scalar.value);
+    return 0;
   }
 
-  /* Incomprehensible value */
-  yaml_ctx_report(ctx, &node->start_mark, LOG_WARNING,
-		  "Invalid boolean value \"%s\"", node->data.scalar.value);
-  return 0;
+  *dest = result->value;
+  return 1;
 }
 
 int

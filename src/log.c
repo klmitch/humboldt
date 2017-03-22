@@ -99,25 +99,25 @@ static struct facility_s facilities[] = {
 #endif
 };
 
+static int
+facility_compare(const char *name, const struct facility_s *member)
+{
+  return strcmp(name, member->f_name);
+}
+
 int
 log_facility(const char *name)
 {
-  int lo = 0, hi = CODE_SIZE(facilities), mid, result;
+  struct facility_s *result;
 
-  /* Implement a binary search */
-  for (mid = hi / 2; lo < hi; mid = lo + (hi - lo) / 2) {
-    /* Found a match! */
-    if (!(result = strcmp(name, facilities[mid].f_name)))
-      return facilities[mid].f_val;
+  if (!(result = (struct facility_s *)bsearch((const void *)name,
+					      (const void *)facilities,
+					      CODE_SIZE(facilities),
+					      sizeof(struct facility_s),
+					      (compare_t)facility_compare)))
+    return -1;
 
-    /* Is it to the left or right? */
-    if (result < 0)
-      hi = mid;
-    else
-      lo = mid + 1;
-  }
-
-  return -1;
+  return result->f_val;
 }
 
 void

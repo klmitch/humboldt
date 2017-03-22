@@ -45,6 +45,20 @@ struct _common_s {
   magic_t	c_magic;	/**< Magic number */
 };
 
+/** \brief Type for comparison functions.
+ *
+ * This type is a convenience type for comparison functions for use
+ * with the standard library bsearch() function.
+ *
+ * \param[in]		key	The key to search an array for.
+ * \param[in]		member	A member of the array being searched.
+ *
+ * \return	A zero value if the key matches the member; otherwise,
+ *		a value less than or greater than 0 if the \p key is
+ *		less than or greater than \p member.
+ */
+typedef int (*compare_t)(const void *key, const void *member);
+
 #endif /* _HUMBOLDT_COMMON_H */
 
 #include <assert.h>	/* pick up current NDEBUG definition */
