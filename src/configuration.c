@@ -379,6 +379,7 @@ static mapkeys_t endpoint_config[] = {
 static void
 proc_endpoint(int idx, config_t *conf, yaml_ctx_t *ctx, yaml_node_t *value)
 {
+  int i;
   ep_config_t *endpoint;
   ep_ad_t *ad;
 
@@ -426,9 +427,18 @@ proc_endpoint(int idx, config_t *conf, yaml_ctx_t *ctx, yaml_node_t *value)
     endpoint->epc_type = ENDPOINT_PEER;
 
   /* Set up advertisements */
-  if (endpoint->epc_type == ENDPOINT_CLIENT)
+  if (endpoint->epc_type == ENDPOINT_CLIENT) {
     endpoint->epc_flags |= EP_CONFIG_UNADVERTISED;
-  else if (!flexlist_count(&endpoint->epc_ads)) {
+
+    /* Clear any advertisements */
+    if (flexlist_count(&endpoint->epc_ads)) {
+      for (i = 0; i < flexlist_count(&endpoint->epc_ads); i++)
+	ep_ad_release((ep_ad_t *)flexlist_item(&endpoint->epc_ads, i));
+
+      /* Release the ad list */
+      flexlist_release(&endpoint->epc_ads);
+    }
+  } else if (!flexlist_count(&endpoint->epc_ads)) {
     if (!(ad = flexlist_append(&endpoint->epc_ads))) {
       yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
 		      "Out of memory creating default endpoint advertisement");
