@@ -29,7 +29,7 @@
 #include "include/yaml_util.h"
 
 /* Recognized short options */
-static const char *opt_str = "c:dDf:hv";
+static const char *opt_str = "c:dDf:hs:v";
 
 /* Recognized long options */
 static const struct option opts[] = {
@@ -38,6 +38,7 @@ static const struct option opts[] = {
   {"no-debug", no_argument, 0, 'D'},
   {"facility", required_argument, 0, 'f'},
   {"help", no_argument, 0, 'h'},
+  {"statedir", required_argument, 0, 's'},
   {"version", no_argument, 0, 'v'},
   {0, 0, 0, 0}
 };
@@ -52,7 +53,7 @@ usage(const char *prog, int exit_code)
   fprintf(stream, "Start the " PACKAGE_NAME ".\n\n");
   fprintf(stream, "Options:\n");
   fprintf(stream, "-c FILE, --config FILE  Location of the Humboldt "
-	  "configuration file (default:\n");
+	  "configuration file. (default:\n");
   fprintf(stream, "                        " DEFAULT_CONFIG ")\n");
   fprintf(stream, "-d, --debug             Enable debugging output; "
 	  "overrides configuration file.\n");
@@ -63,6 +64,10 @@ usage(const char *prog, int exit_code)
 	  "facility.\n");
   fprintf(stream, "-h, --help              Show this help message and "
 	  "exit.\n");
+  fprintf(stream, "-s DIR, --statedir DIR  Set the state directory. This "
+	  "directory will contain\n");
+  fprintf(stream, "                        several state files. (default:\n");
+  fprintf(stream, "                        " DEFAULT_STATEDIR ")\n");
   fprintf(stream, "-v, --version           Output version information.\n");
 
   exit(exit_code);
@@ -144,6 +149,19 @@ parse_args(config_t *conf, int argc, char **argv)
     case 'h':
       /* Emit the usage message */
       usage(conf->cf_prog, EXIT_SUCCESS);
+      break;
+
+    case 's':
+      /* Don't allow -s to be used multiple times */
+      if (conf->cf_flags & CONFIG_STATEDIR_FIXED) {
+	fprintf(stderr, "%s: The state directory has already been set\n",
+		conf->cf_prog);
+	usage(conf->cf_prog, EXIT_FAILURE);
+      }
+
+      /* Save the state directory */
+      conf->cf_statedir = optarg;
+      conf->cf_flags |= CONFIG_STATEDIR_FIXED;
       break;
 
     case 'v':
@@ -580,11 +598,59 @@ proc_networks(const char *key, config_t *conf, yaml_ctx_t *ctx,
   yaml_ctx_path_pop(ctx);
 }
 
+static void
+proc_statedir(const char *key, config_t *conf, yaml_ctx_t *ctx,
+	      yaml_node_t *value)
+{
+  int len;
+  const char *dirname;
+  char *tmp;
+
+  common_verify(conf, CONFIG_MAGIC);
+
+  /* Convert the value as a string */
+  if (!yaml_get_str(ctx, value, &dirname, 0))
+    return;
+
+  /* Ensure it's a valid path */
+  len = strlen(dirname);
+  if (*dirname != '/' || len <= 2) {
+    yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
+		    "Invalid state directory path \"%s\"", dirname);
+    return;
+  } else if (conf->cf_flags & CONFIG_STATEDIR_FIXED)
+    /* It's fixed from the command line */
+    return;
+
+  /* Strip off trailing slashes */
+  while (dirname[len - 1] == '/')
+    len--;
+
+  /* Allocate memory for the new value */
+  if (!(tmp = (char *)malloc(len))) {
+    yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
+		    "Out of memory setting state directory path");
+    return;
+  }
+
+  /* Copy the path in */
+  strncpy(tmp, dirname, len);
+  tmp[len] = '\0';
+
+  /* Release the existing value if needed */
+  if (conf->cf_flags & CONFIG_STATEDIR_ALLOCATED)
+    free((void *)conf->cf_statedir);
+
+  conf->cf_statedir = tmp;
+  conf->cf_flags |= CONFIG_STATEDIR_ALLOCATED;
+}
+
 static mapkeys_t top_level[] = {
   MAPKEY("debug", proc_debug),
   MAPKEY("endpoints", proc_endpoints),
   MAPKEY("facility", proc_facility),
-  MAPKEY("networks", proc_networks)
+  MAPKEY("networks", proc_networks),
+  MAPKEY("statedir", proc_statedir)
 };
 
 void

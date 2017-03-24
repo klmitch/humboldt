@@ -16,7 +16,9 @@ AUTOMAKE_OPTIONS = subdir-objects foreign
 
 EXTRA_DIST = autogen.sh docs lib LICENSE
 
-AM_CPPFLAGS = -DSYSCONFDIR='"$(sysconfdir)"'
+AM_CPPFLAGS = \
+	-DLOCALSTATEDIR='"$(localstatedir)"' \
+	-DSYSCONFDIR='"$(sysconfdir)"'
 
 bin_PROGRAMS = humboldt
 

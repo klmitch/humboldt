@@ -41,6 +41,7 @@ struct _config_s {
   magic_t	cf_magic;	/**< Magic number */
   uint32_t	cf_flags;	/**< Configuration flags */
   const char   *cf_config;	/**< Name of the configuration file */
+  const char   *cf_statedir;	/**< Name of the state directory */
   const char   *cf_prog;	/**< The program name */
   int		cf_facility;	/**< Syslog facility to log to */
   flexlist_t	cf_endpoints;	/**< Configured endpoints */
@@ -59,7 +60,14 @@ struct _config_s {
  *
  * This is the default location of the configuration file.
  */
-#define DEFAULT_CONFIG SYSCONFDIR "/" PACKAGE_TARNAME "/config.yaml"
+#define DEFAULT_CONFIG		SYSCONFDIR "/" PACKAGE_TARNAME "/config.yaml"
+
+/** \brief Default state file location.
+ *
+ * This is the default location of the state directory.
+ */
+#define DEFAULT_STATEDIR	LOCALSTATEDIR "/" PACKAGE_TARNAME
+
 
 /** \brief Initialize a configuration structure.
  *
@@ -68,15 +76,16 @@ struct _config_s {
  * initialized.
  */
 #define CONFIG_INIT()							\
-  {CONFIG_MAGIC, CONFIG_FILE_DEFAULT, DEFAULT_CONFIG, 0, LOG_DAEMON,	\
-      FLEXLIST_INIT(ep_config_t), FLEXLIST_INIT(ep_network_t)}
+  {CONFIG_MAGIC, CONFIG_FILE_DEFAULT, DEFAULT_CONFIG, DEFAULT_STATEDIR, \
+      0, LOG_DAEMON, FLEXLIST_INIT(ep_config_t),			\
+      FLEXLIST_INIT(ep_network_t)}
 
 /** \brief Debugging enabled.
  *
  * A configuration flag indicating that debugging output should be
  * emitted.
  */
-#define CONFIG_DEBUG		0x80000000
+#define CONFIG_DEBUG			0x80000000
 
 /** \brief Debugging fixed.
  *
@@ -84,7 +93,7 @@ struct _config_s {
  * setting from the command line and cannot be overridden by the
  * configuration file.
  */
-#define CONFIG_DEBUG_FIXED	0x40000000
+#define CONFIG_DEBUG_FIXED		0x40000000
 
 /** \brief Configuration file is at its default.
  *
@@ -92,7 +101,7 @@ struct _config_s {
  * "--config" option multiple times; it is cleared after processing
  * the first "--config" or "-c" option.
  */
-#define CONFIG_FILE_DEFAULT	0x20000000
+#define CONFIG_FILE_DEFAULT		0x20000000
 
 /** \brief Logging has been initialized.
  *
@@ -102,7 +111,7 @@ struct _config_s {
  * sent to standard output, with log messages of \c LOG_WARNING or
  * higher sent to standard error.
  */
-#define CONFIG_LOG_INITIALIZED	0x10000000
+#define CONFIG_LOG_INITIALIZED		0x10000000
 
 /** \brief Facility fixed.
  *
@@ -110,7 +119,22 @@ struct _config_s {
  * setting from the command line and cannot be overridden by the
  * configuration file.
  */
-#define CONFIG_FACILITY_FIXED	0x08000000
+#define CONFIG_FACILITY_FIXED		0x08000000
+
+/** \brief State directory allocated.
+ *
+ * A configuration flag indicating that the state directory path is
+ * stored in allocated memory.
+ */
+#define CONFIG_STATEDIR_ALLOCATED	0x04000000
+
+/** \brief State directory fixed.
+ *
+ * A configuration flag indicating that the state directory path came
+ * from the command line and cannot be overridden by the configuration
+ * file.
+ */
+#define CONFIG_STATEDIR_FIXED		0x02000000
 
 /** \brief Initialize configuration.
  *

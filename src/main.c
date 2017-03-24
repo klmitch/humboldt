@@ -76,6 +76,9 @@ main(int argc, char **argv)
   /* Output information about the configuration */
   log_emit(&conf, LOG_DEBUG, "Configuration file: \"%s\"%s", conf.cf_config,
 	   (conf.cf_flags & CONFIG_FILE_DEFAULT) ? " (default)" : "");
+  log_emit(&conf, LOG_DEBUG, "State directory: \"%s\"%s%s", conf.cf_statedir,
+	   (conf.cf_flags & CONFIG_STATEDIR_ALLOCATED) ? " [allocated]" : "",
+	   (conf.cf_flags & CONFIG_STATEDIR_FIXED) ? " (no override)" : "");
   log_emit(&conf, LOG_DEBUG, "Debugging mode %s%s",
 	   (conf.cf_flags & CONFIG_DEBUG) ? "ENABLED" : "DISABLED",
 	   (conf.cf_flags & CONFIG_DEBUG_FIXED) ? " (no override)" : "");
