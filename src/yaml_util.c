@@ -55,9 +55,9 @@ yaml_ctx_path_push_idx(yaml_ctx_t *ctx, int idx)
   if (ctx->yc_pathlen >= PATH_BUF)
     return; /* Can't add it to the buffer */
 
-  /* Add the sequence index */
+  /* Add the sequence index; we make it 1-indexed for convenience */
   if ((n = snprintf(ctx->yc_path + ctx->yc_pathlen, PATH_BUF - ctx->yc_pathlen,
-		    "/[%d]", idx)) > PATH_BUF - ctx->yc_pathlen) {
+		    "/[%d]", idx + 1)) > PATH_BUF - ctx->yc_pathlen) {
     ctx->yc_pathlen = PATH_BUF;
     ctx->yc_path[PATH_BUF - 1] = '\0';
   } else
@@ -87,10 +87,10 @@ yaml_ctx_report(yaml_ctx_t *ctx, yaml_mark_t *loc, int priority,
   n = snprintf(msgbuf, sizeof(msgbuf), "%s[%d]:%s", ctx->yc_filename,
 	       ctx->yc_docnum, ctx->yc_path);
 
-  /* Add the location, if one was provided */
+  /* Add the location, if one was provided; use 1-indexed line numbers */
   if (loc && n < sizeof(msgbuf))
     n += snprintf(msgbuf + n, sizeof(msgbuf) - n, " (line %d)",
-		  (int)loc->line);
+		  (int)(loc->line + 1));
 
   /* Format the message */
   if (n < sizeof(msgbuf))
