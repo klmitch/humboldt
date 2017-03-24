@@ -96,6 +96,7 @@ struct _yaml_ctx_s {
   config_t     *yc_conf;	/**< The configuration */
   const char   *yc_filename;	/**< Name of the file being processed */
   int		yc_docnum;	/**< Number of the document in the file */
+  int		yc_docvalid;	/**< Count of valid documents in the file */
   yaml_document_t
 		yc_document;	/**< The document being processed */
   char		yc_path[PATH_BUF];
@@ -253,6 +254,8 @@ int yaml_get_str(yaml_ctx_t *ctx, yaml_node_t *node, const char **dest,
  * \param[in]		conf	The configuration.
  * \param[in]		filename
  *				The name of the file to read.
+ * \param[in]		stream	An open stdio stream for reading the
+ *				file.
  * \param[in]		keys	A sorted list of #mapkeys_t values
  *				mapping keys to processors.
  * \param[in]		keycnt	The number of keys in \p keys.
@@ -270,9 +273,11 @@ int yaml_get_str(yaml_ctx_t *ctx, yaml_node_t *node, const char **dest,
  *				if \p dest does not need to be updated
  *				between documents.  Ignored if \p
  *				all_docs is false.
+ *
+ * \return	A false value if an error occurred, true otherwise.
  */
-void yaml_file_mapping(config_t *conf, const char *filename,
-		       mapkeys_t *keys, size_t keycnt, void *dest,
-		       int all_docs, nextdoc_t nextdoc);
+int yaml_file_mapping(config_t *conf, const char *filename, FILE *stream,
+		      mapkeys_t *keys, size_t keycnt, void *dest,
+		      int all_docs, nextdoc_t nextdoc);
 
 #endif /* _HUMBOLDT_YAML_UTIL_H */

@@ -16,6 +16,7 @@
 
 #include <config.h>
 
+#include <errno.h>
 #include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -662,18 +663,31 @@ static mapkeys_t top_level[] = {
   MAPKEY("statedir", proc_statedir)
 };
 
-void
+int
 config_read(config_t *conf)
 {
-  int make_peer = 1, make_client = 1, i, len;
+  FILE *stream;
+  int make_peer = 1, make_client = 1, i, len, valid;
   ep_config_t *endpoint;
   ep_ad_t *ad;
   ep_network_t *network;
   char path_buf[1024]; /* more than enough for a socket path */
 
   /* Read the configuration file */
-  yaml_file_mapping(conf, conf->cf_config, top_level, MAPKEYS_COUNT(top_level),
-		    (void *)conf, 0, 0);
+  if (!(stream = fopen(conf->cf_config, "r"))) {
+    if (!(conf->cf_flags & CONFIG_FILE_DEFAULT) || errno != ENOENT) {
+      log_emit(conf, LOG_WARNING, "%s opening configuration file \"%s\"",
+	       strerror(errno), conf->cf_config);
+      return 0;
+    }
+  } else {
+    valid = yaml_file_mapping(conf, conf->cf_config, stream, top_level,
+			      MAPKEYS_COUNT(top_level), (void *)conf, 0, 0);
+    fclose(stream);
+
+    if (!valid)
+      return 0;
+  }
 
   /* Ensure we have at least one of each type of endpoint */
   for (i = 0; i < flexlist_count(&conf->cf_endpoints); i++) {
@@ -776,6 +790,8 @@ config_read(config_t *conf)
       /* Initialize the network */
       ep_network_init(network);
   }
+
+  return 1;
 }
 
 void
@@ -795,5 +811,8 @@ initialize_config(config_t *conf, int argc, char **argv)
   parse_args(conf, argc, argv);
 
   /* Read the configuration file */
-  config_read(conf);
+  if (!config_read(conf)) {
+    log_emit(conf, LOG_ERR, "Unable to read configuration, exiting...");
+    exit(EXIT_FAILURE);
+  }
 }

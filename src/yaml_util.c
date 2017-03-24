@@ -414,38 +414,33 @@ report_parser_error(yaml_ctx_t *ctx, yaml_parser_t *parser)
 		  parser->problem);
 }
 
-void
-yaml_file_mapping(config_t *conf, const char *filename,
+int
+yaml_file_mapping(config_t *conf, const char *filename, FILE *stream,
 		  mapkeys_t *keys, size_t keycnt, void *dest,
 		  int all_docs, nextdoc_t nextdoc)
 {
   yaml_parser_t parser;
   yaml_ctx_t ctx;
   yaml_node_t *root;
-  FILE *fp;
 
   common_verify(conf, CONFIG_MAGIC);
-
-  /* Open the YAML file */
-  if (!(fp = fopen(filename, "r")))
-    return;
 
   /* Initialize the context */
   ctx.yc_conf = conf;
   ctx.yc_filename = filename;
   ctx.yc_docnum = 0;
+  ctx.yc_docvalid = 0;
   ctx.yc_path[0] = '\0';
   ctx.yc_pathlen = 0;
 
   /* Initialize the parser */
   if (!yaml_parser_initialize(&parser)) {
     report_parser_error(&ctx, &parser);
-    fclose(fp);
-    return;
+    return 0;
   }
 
   /* Set it to read from our stream */
-  yaml_parser_set_input_file(&parser, fp);
+  yaml_parser_set_input_file(&parser, stream);
 
   /* Read documents from the stream */
   do {
@@ -474,9 +469,13 @@ yaml_file_mapping(config_t *conf, const char *filename,
 
     /* Clean up the document */
     yaml_document_delete(&ctx.yc_document);
+
+    /* Increment the count of valid documents */
+    ctx.yc_docvalid++;
   } while (all_docs);
 
   /* Clean up after ourselves */
   yaml_parser_delete(&parser);
-  fclose(fp);
+
+  return ctx.yc_docnum == ctx.yc_docvalid;
 }
