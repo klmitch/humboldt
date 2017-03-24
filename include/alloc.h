@@ -166,6 +166,15 @@ struct _flexlist_s {
  */
 #define flexlist_count(obj)	((obj)->fx_count)
 
+/** \brief Pop an item off the end of a flexible list.
+ *
+ * This macro decrements the number of items contained in the flexible
+ * list, essentially popping the last element off the list.
+ *
+ * \param[in,out]	obj	A pointer to the flexible list.
+ */
+#define flexlist_pop(obj)	((obj)->fx_count--)
+
 /** \brief Determine memory consumed by the flexible list.
  *
  * Returns the amount of memory in use for representing the flexible

@@ -20,8 +20,8 @@
 #include <stdint.h>	/* for uint32_t */
 #include <syslog.h>	/* for LOG_DAEMON */
 
+#include "alloc.h"	/* for flexlist_t */
 #include "common.h"	/* for magic_t */
-
 
 /** \brief Configuration.
  *
@@ -30,6 +30,8 @@
  * file.
  */
 typedef struct _config_s config_t;
+
+#include "endpoint.h"	/* for endpoint types; depends on config_t */
 
 /** \brief Configuration structure.
  *
@@ -41,6 +43,8 @@ struct _config_s {
   const char   *cf_config;	/**< Name of the configuration file */
   const char   *cf_prog;	/**< The program name */
   int		cf_facility;	/**< Syslog facility to log to */
+  flexlist_t	cf_endpoints;	/**< Configured endpoints */
+  flexlist_t	cf_networks;	/**< Configured origination networks */
 };
 
 /** \brief Configuration magic number.
@@ -64,7 +68,8 @@ struct _config_s {
  * initialized.
  */
 #define CONFIG_INIT()							\
-  {CONFIG_MAGIC, CONFIG_FILE_DEFAULT, DEFAULT_CONFIG, 0, LOG_DAEMON}
+  {CONFIG_MAGIC, CONFIG_FILE_DEFAULT, DEFAULT_CONFIG, 0, LOG_DAEMON,	\
+      FLEXLIST_INIT(ep_config_t), FLEXLIST_INIT(ep_network_t)}
 
 /** \brief Debugging enabled.
  *
