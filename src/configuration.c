@@ -588,6 +588,25 @@ static mapkeys_t top_level[] = {
 };
 
 void
+config_read(config_t *conf)
+{
+  ep_network_t *network;
+
+  /* Read the configuration file */
+  yaml_file_mapping(conf, conf->cf_config, top_level, MAPKEYS_COUNT(top_level),
+		    (void *)conf, 0, 0);
+
+  /* Ensure we have at least one network */
+  if (!flexlist_count(&conf->cf_networks)) {
+    if (!(network = flexlist_append(&conf->cf_networks)))
+      log_emit(conf, LOG_WARNING, "Out of memory creating default network");
+    else
+      /* Initialize the network */
+      ep_network_init(network);
+  }
+}
+
+void
 initialize_config(config_t *conf, int argc, char **argv)
 {
   const char *tmp;
@@ -604,6 +623,5 @@ initialize_config(config_t *conf, int argc, char **argv)
   parse_args(conf, argc, argv);
 
   /* Read the configuration file */
-  yaml_file_mapping(conf, conf->cf_config, top_level, MAPKEYS_COUNT(top_level),
-		    (void *)conf, 0, 0);
+  config_read(conf);
 }
