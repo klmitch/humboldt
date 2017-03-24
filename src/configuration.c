@@ -420,15 +420,8 @@ proc_endpoint(int idx, config_t *conf, yaml_ctx_t *ctx, yaml_node_t *value)
 		    (void *)endpoint);
   yaml_ctx_path_pop(ctx);
 
-  /* Must have an address */
-  if (!(endpoint->epc_addr.ea_flags & (EA_LOCAL | EA_IPADDR))) {
-    yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-		    "No address provided for endpoint");
-    endpoint->epc_flags |= EP_CONFIG_INVALID;
-  }
-
   /* Set the default port as needed */
-  if ((endpoint->epc_addr.ea_flags & (EA_IPADDR | EA_PORT)) == EA_IPADDR)
+  if (!(endpoint->epc_addr.ea_flags & (EA_LOCAL | EA_PORT)))
     ep_addr_set_port(&endpoint->epc_addr, DEFAULT_PORT, ctx, value);
 
   /* Validate the endpoint */
@@ -656,11 +649,108 @@ static mapkeys_t top_level[] = {
 void
 config_read(config_t *conf)
 {
+  int make_peer = 1, make_client = 1, i, len;
+  ep_config_t *endpoint;
+  ep_ad_t *ad;
   ep_network_t *network;
+  char path_buf[1024]; /* more than enough for a socket path */
 
   /* Read the configuration file */
   yaml_file_mapping(conf, conf->cf_config, top_level, MAPKEYS_COUNT(top_level),
 		    (void *)conf, 0, 0);
+
+  /* Ensure we have at least one of each type of endpoint */
+  for (i = 0; i < flexlist_count(&conf->cf_endpoints); i++) {
+    endpoint = (ep_config_t *)flexlist_item(&conf->cf_endpoints, i);
+
+    /* What type of endpoint do we have? */
+    if (endpoint->epc_type == ENDPOINT_CLIENT)
+      make_client = 0;
+    else if (endpoint->epc_type == ENDPOINT_PEER)
+      make_peer = 0;
+
+    /* If we have the endpoints we need, we're all done */
+    if (!(make_client + make_peer))
+      break;
+  }
+
+  /* Do we need to create a client endpoint? */
+  if (make_client) {
+    if (!(endpoint = flexlist_append(&conf->cf_endpoints)))
+      log_emit(conf, LOG_WARNING,
+	       "Out of memory creating default client endpoint");
+    else {
+      /* Initialize the endpoint */
+      ep_config_init(endpoint);
+
+      /* Set the basic flags and endpoint type */
+      endpoint->epc_flags = EP_CONFIG_UNADVERTISED;
+      endpoint->epc_type = ENDPOINT_CLIENT;
+
+#ifdef AF_LOCAL
+      /* Begin by copying the statedir to the path_buf */
+      len = strlen(conf->cf_statedir);
+      strncpy(path_buf, conf->cf_statedir, sizeof(path_buf));
+
+      /* Add a '/' and the socket file name */
+      strncpy(&path_buf[len], "/" DEFAULT_CLIENT_SOCK,
+	      sizeof(path_buf) - len > 0 ? sizeof(path_buf) - len : 0);
+
+      /* Make sure it's terminated */
+      path_buf[len + sizeof("/" DEFAULT_CLIENT_SOCK) > 1024 ?
+	       1023 : len + sizeof("/" DEFAULT_CLIENT_SOCK)] = '\0';
+
+      /* Set the local address */
+      if (!ep_addr_set_local(&endpoint->epc_addr, path_buf, 0, 0)) {
+	log_emit(conf, LOG_WARNING,
+		 "Unable to set up client port at \"%s\"; trying loopback",
+		 path_buf);
+	/* Clear the local address so we can try again */
+	ep_addr_init(&endpoint->epc_addr);
+#endif
+
+	/* Set to the loopback address */
+	if (!ep_addr_set_ipaddr(&endpoint->epc_addr, "127.0.0.1", 0, 0) ||
+	    !ep_addr_set_port(&endpoint->epc_addr, DEFAULT_PORT, 0, 0)) {
+	  log_emit(conf, LOG_WARNING, "Unable to create a client port");
+	  flexlist_pop(&conf->cf_endpoints);
+	}
+
+#ifdef AF_LOCAL
+      }
+#endif
+    }
+  }
+
+  /* Do we need to create a peer endpoint? */
+  if (make_peer) {
+    if (!(endpoint = flexlist_append(&conf->cf_endpoints)))
+      log_emit(conf, LOG_WARNING,
+	       "Out of memory creating default peer endpoint");
+    else {
+      /* Initialize the endpoint */
+      ep_config_init(endpoint);
+
+      /* Set the endpoint type */
+      endpoint->epc_type = ENDPOINT_PEER;
+
+      /* Set the default port */
+      if (!ep_addr_set_port(&endpoint->epc_addr, DEFAULT_PORT, 0, 0)) {
+	log_emit(conf, LOG_WARNING, "Unable to create a peer port");
+	flexlist_pop(&conf->cf_endpoints);
+      } else if (!(ad = flexlist_append(&endpoint->epc_ads))) {
+	log_emit(conf, LOG_WARNING,
+		 "Out of memory creating default endpoint advertisement for "
+		 "default peer endpoint");
+	flexlist_pop(&conf->cf_endpoints);
+      } else {
+	/* Initialize the ad */
+	ep_ad_init(ad, endpoint);
+
+	ep_addr_default(&ad->epa_addr, &endpoint->epc_addr);
+      }
+    }
+  }
 
   /* Ensure we have at least one network */
   if (!flexlist_count(&conf->cf_networks)) {

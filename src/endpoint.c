@@ -39,8 +39,9 @@ ep_addr_set_local(ep_addr_t *addr, const char *path,
 
   /* Look out for duplications */
   if (addr->ea_flags & (EA_LOCAL | EA_IPADDR | EA_PORT)) {
-    yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-		    "Address has already been set");
+    if (ctx)
+      yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
+		      "Address has already been set");
     addr->ea_flags |= EA_INVALID;
     return 0;
   }
@@ -50,17 +51,19 @@ ep_addr_set_local(ep_addr_t *addr, const char *path,
 	     SUN_LEN(&addr->ea_addr.eau_local) - 1);
   len = strlen(path);
   if (len > max_len) {
-    yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-		    "Local address \"%s\" is too long (%d > maximum of %d)",
-		    path, len, max_len);
+    if (ctx)
+      yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
+		      "Local address \"%s\" is too long (%d > maximum of %d)",
+		      path, len, max_len);
     addr->ea_flags |= EA_INVALID;
     return 0;
   }
 
   /* Make sure it's a valid path */
   if (*path != '/' || len <= 2 || path[len - 1] == '/') {
-    yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-		    "Local address \"%s\" is invalid", path);
+    if (ctx)
+      yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
+		      "Local address \"%s\" is invalid", path);
     addr->ea_flags |= EA_INVALID;
     return 0;
   }
@@ -72,8 +75,9 @@ ep_addr_set_local(ep_addr_t *addr, const char *path,
 
   return 1;
 #else
-  yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-                  "Local addresses not supported on this system");
+  if (ctx)
+    yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
+		    "Local addresses not supported on this system");
   addr->ea_flags |= EA_INVALID;
   return 0;
 #endif
@@ -94,8 +98,9 @@ ep_addr_set_ipaddr(ep_addr_t *addr, const char *pres,
 
   /* Look out for duplications */
   if (addr->ea_flags & (EA_LOCAL | EA_IPADDR)) {
-    yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-		    "Address has already been set");
+    if (ctx)
+      yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
+		      "Address has already been set");
     addr->ea_flags |= EA_INVALID;
     return 0;
   }
@@ -128,7 +133,7 @@ ep_addr_set_ipaddr(ep_addr_t *addr, const char *pres,
   }
 #else
   /* Emit an IPv6 warning only once */
-  if (!inet6_warning) {
+  if (!inet6_warning && ctx) {
     yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
 		    "IPv6 addresses are not supported by this system");
     inet6_warning = 1;
@@ -136,8 +141,9 @@ ep_addr_set_ipaddr(ep_addr_t *addr, const char *pres,
 #endif
 
   /* OK, it's an invalid address */
-  yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-		  "Invalid IP address \"%s\"", pres);
+  if (ctx)
+    yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
+		    "Invalid IP address \"%s\"", pres);
   addr->ea_flags |= EA_INVALID;
 
   return 0;
@@ -153,16 +159,18 @@ ep_addr_set_port(ep_addr_t *addr, int port,
 
   /* Look out for duplications */
   if (addr->ea_flags & (EA_LOCAL | EA_PORT)) {
-    yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-		    "Port has already been set");
+    if (ctx)
+      yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
+		      "Port has already been set");
     addr->ea_flags |= EA_INVALID;
     return 0;
   }
 
   /* Bounds-check the port number */
   if (port <= 0 || port > 65535) {
-    yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-		    "Port %d out of range (0, 65535]", port);
+    if (ctx)
+      yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
+		      "Port %d out of range (0, 65535]", port);
     addr->ea_flags |= EA_INVALID;
     return 0;
   }
@@ -231,12 +239,21 @@ ep_addr_default(ep_addr_t *dest, ep_addr_t *src)
     }
 
     if (!(dest->ea_flags & EA_PORT) && (src->ea_flags & EA_PORT)) {
-      if (src->ea_addr.eau_addr.sa_family == AF_INET)
-	dest->ea_addr.eau_ip4.sin_port = src->ea_addr.eau_ip4.sin_port;
+      /* Load the port from the source */
 #ifdef AF_INET6
-      else if (src->ea_addr.eau_addr.sa_family == AF_INET6)
-	dest->ea_addr.eau_ip6.sin6_port = src->ea_addr.eau_ip6.sin6_port;
+      if (src->ea_addr.eau_addr.sa_family == AF_INET6)
+	port = src->ea_addr.eau_ip6.sin6_port;
+      else
 #endif
+	port = src->ea_addr.eau_ip4.sin_port;
+
+      /* Save it to the destination */
+#ifdef AF_INET6
+      if (dest->ea_addr.eau_addr.sa_family == AF_INET6)
+	dest->ea_addr.eau_ip6.sin6_port = port;
+      else
+#endif
+	dest->ea_addr.eau_ip4.sin_port = port;
 
       /* Record that we have the port */
       dest->ea_flags |= EA_PORT;

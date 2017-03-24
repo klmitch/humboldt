@@ -68,6 +68,13 @@ struct _config_s {
  */
 #define DEFAULT_STATEDIR	LOCALSTATEDIR "/" PACKAGE_TARNAME
 
+/** \brief Default socket file name.
+ *
+ * This is the default name of the client socket.  If no client
+ * endpoint is described in the configuration file, a socket with this
+ * name will be created in the state directory.
+ */
+#define DEFAULT_CLIENT_SOCK	"socket"
 
 /** \brief Initialize a configuration structure.
  *
