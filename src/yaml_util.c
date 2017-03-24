@@ -132,7 +132,9 @@ process_mapping_key(mapkeys_t *keys, size_t keycnt,
     return;
   }
 
+  yaml_ctx_path_push_key(ctx, key);
   result->mk_proc(key, dest, ctx, value);
+  yaml_ctx_path_pop(ctx);
 }
 
 static const char *_node_types[] = {
@@ -155,6 +157,7 @@ void
 yaml_proc_sequence(yaml_ctx_t *ctx, yaml_node_t *seq,
 		   itemproc_t proc, void *dest)
 {
+  int idx;
   yaml_node_t *item;
   yaml_node_item_t *cursor;
 
@@ -174,7 +177,10 @@ yaml_proc_sequence(yaml_ctx_t *ctx, yaml_node_t *seq,
   for (cursor = seq->data.sequence.items.start;
        cursor < seq->data.sequence.items.top; cursor++) {
     item = yaml_document_get_node(&ctx->yc_document, *cursor);
-    proc(cursor - seq->data.sequence.items.start, dest, ctx, item);
+    idx = cursor - seq->data.sequence.items.start;
+    yaml_ctx_path_push_idx(ctx, idx);
+    proc(idx, dest, ctx, item);
+    yaml_ctx_path_pop(ctx);
   }
 }
 

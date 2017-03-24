@@ -287,10 +287,8 @@ proc_endpoint_ad(int idx, ep_config_t *endpoint, yaml_ctx_t *ctx,
   ep_ad_init(ad, endpoint);
 
   /* Process the configuration */
-  yaml_ctx_path_push_idx(ctx, idx);
   yaml_proc_mapping(ctx, value, ad_config, MAPKEYS_COUNT(ad_config),
 		    (void *)ad);
-  yaml_ctx_path_pop(ctx);
 
   /* Validate the advertisement */
   if (ad->epa_flags & EA_INVALID) {
@@ -308,12 +306,10 @@ proc_endpoint_advertise(const char *key, ep_config_t *endpoint,
 
   common_verify(endpoint, EP_CONFIG_MAGIC);
 
-  if (value->type == YAML_SEQUENCE_NODE) {
+  if (value->type == YAML_SEQUENCE_NODE)
     /* Process all the elements in the sequence */
-    yaml_ctx_path_push_key(ctx, key);
     yaml_proc_sequence(ctx, value, (itemproc_t)proc_endpoint_ad, endpoint);
-    yaml_ctx_path_pop(ctx);
-  } else if (yaml_get_bool(ctx, value, &advertise)) {
+  else if (yaml_get_bool(ctx, value, &advertise)) {
     if (!advertise)
       endpoint->epc_flags |= EP_CONFIG_UNADVERTISED;
   } else
@@ -414,11 +410,9 @@ proc_endpoint(int idx, config_t *conf, yaml_ctx_t *ctx, yaml_node_t *value)
   ep_config_init(endpoint);
 
   /* Process the configuration */
-  yaml_ctx_path_push_idx(ctx, idx);
   yaml_proc_mapping(ctx, value,
 		    endpoint_config, MAPKEYS_COUNT(endpoint_config),
 		    (void *)endpoint);
-  yaml_ctx_path_pop(ctx);
 
   /* Set the default port as needed */
   if (!(endpoint->epc_addr.ea_flags & (EA_LOCAL | EA_PORT)))
@@ -470,9 +464,7 @@ proc_endpoints(const char *key, config_t *conf, yaml_ctx_t *ctx,
   common_verify(conf, CONFIG_MAGIC);
 
   /* Process all the elements in the sequence */
-  yaml_ctx_path_push_key(ctx, key);
   yaml_proc_sequence(ctx, value, (itemproc_t)proc_endpoint, conf);
-  yaml_ctx_path_pop(ctx);
 }
 
 static void
@@ -567,10 +559,8 @@ proc_network(int idx, config_t *conf, yaml_ctx_t *ctx, yaml_node_t *value)
   ep_network_init(network);
 
   /* Process the configuration */
-  yaml_ctx_path_push_idx(ctx, idx);
   yaml_proc_mapping(ctx, value, network_config, MAPKEYS_COUNT(network_config),
 		    (void *)network);
-  yaml_ctx_path_pop(ctx);
 
   /* Validate the network */
   if (network->epn_flags & EP_NETWORK_INVALID) {
@@ -586,9 +576,7 @@ proc_networks(const char *key, config_t *conf, yaml_ctx_t *ctx,
   common_verify(conf, CONFIG_MAGIC);
 
   /* Process all the elements in the sequence */
-  yaml_ctx_path_push_key(ctx, key);
   yaml_proc_sequence(ctx, value, (itemproc_t)proc_network, conf);
-  yaml_ctx_path_pop(ctx);
 }
 
 static void
