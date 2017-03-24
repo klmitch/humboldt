@@ -272,6 +272,7 @@ static void
 proc_endpoint_ad(int idx, ep_config_t *endpoint, yaml_ctx_t *ctx,
 		 yaml_node_t *value)
 {
+  const char *network;
   ep_ad_t *ad;
 
   common_verify(endpoint, EP_CONFIG_MAGIC);
@@ -287,8 +288,21 @@ proc_endpoint_ad(int idx, ep_config_t *endpoint, yaml_ctx_t *ctx,
   ep_ad_init(ad, endpoint);
 
   /* Process the configuration */
-  yaml_proc_mapping(ctx, value, ad_config, MAPKEYS_COUNT(ad_config),
-		    (void *)ad);
+  if (value->type == YAML_MAPPING_NODE)
+    yaml_proc_mapping(ctx, value, ad_config, MAPKEYS_COUNT(ad_config),
+		      (void *)ad);
+  else if (yaml_get_str(ctx, value, &network, 1)) {
+    if (network) {
+      if (strlen(network) > NETWORK_LEN) {
+	yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
+			"Network name \"%s\" too long; maximum length: %d",
+			network, NETWORK_LEN);
+	ad->epa_flags |= EP_AD_INVALID;
+      } else
+	strcpy(ad->epa_network, network);
+    }
+  } else
+    ad->epa_flags |= EA_INVALID;
 
   /* Validate the advertisement */
   if (ad->epa_flags & EA_INVALID) {
@@ -544,6 +558,7 @@ static mapkeys_t network_config[] = {
 static void
 proc_network(int idx, config_t *conf, yaml_ctx_t *ctx, yaml_node_t *value)
 {
+  const char *name;
   ep_network_t *network;
 
   common_verify(conf, CONFIG_MAGIC);
@@ -559,8 +574,21 @@ proc_network(int idx, config_t *conf, yaml_ctx_t *ctx, yaml_node_t *value)
   ep_network_init(network);
 
   /* Process the configuration */
-  yaml_proc_mapping(ctx, value, network_config, MAPKEYS_COUNT(network_config),
-		    (void *)network);
+  if (value->type == YAML_MAPPING_NODE)
+    yaml_proc_mapping(ctx, value, network_config,
+		      MAPKEYS_COUNT(network_config), (void *)network);
+  else if (yaml_get_str(ctx, value, &name, 1)) {
+    if (name) {
+      if (strlen(name) > NETWORK_LEN) {
+	yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
+			"Network name \"%s\" too long; maximum length: %d",
+			name, NETWORK_LEN);
+	network->epn_flags |= EP_NETWORK_INVALID;
+      } else
+	strcpy(network->epn_name, name);
+    }
+  } else
+    network->epn_flags |= EP_NETWORK_INVALID;
 
   /* Validate the network */
   if (network->epn_flags & EP_NETWORK_INVALID) {
