@@ -402,12 +402,15 @@ proc_endpoint(int idx, config_t *conf, yaml_ctx_t *ctx, yaml_node_t *value)
   yaml_ctx_path_pop(ctx);
 
   /* Must have an address */
-  if (endpoint->epc_addr.ea_flags != EA_LOCAL &&
-      endpoint->epc_addr.ea_flags != (EA_IPADDR | EA_PORT)) {
+  if (!(endpoint->epc_addr.ea_flags & (EA_LOCAL | EA_IPADDR))) {
     yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
 		    "No address provided for endpoint");
     endpoint->epc_flags |= EP_CONFIG_INVALID;
   }
+
+  /* Set the default port as needed */
+  if ((endpoint->epc_addr.ea_flags & (EA_IPADDR | EA_PORT)) == EA_IPADDR)
+    ep_addr_set_port(&endpoint->epc_addr, DEFAULT_PORT, ctx, value);
 
   /* Validate the endpoint */
   if (endpoint->epc_flags & EP_CONFIG_INVALID) {

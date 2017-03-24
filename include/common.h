@@ -19,6 +19,13 @@
 
 #include <stdint.h>
 
+/** \brief Default port number.
+ *
+ * This macro contains the default port number for Humboldt.  It can
+ * be overridden from the endpoint configuration.
+ */
+#define DEFAULT_PORT		7300
+
 /** \brief Magic number type.
  *
  * Magic numbers are used throughout the code to guard against
