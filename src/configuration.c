@@ -223,7 +223,7 @@ proc_endpoint_ad_ip(const char *key, ep_ad_t *ad,
   common_verify(ad, EP_AD_MAGIC);
 
   /* Convert the IP as a string and set it */
-  if (!yaml_get_str(ctx, value, &pres, 0) ||
+  if (!yaml_get_str(ctx, value, &pres, 0, 0) ||
       !ep_addr_set_ipaddr(&ad->epa_addr, pres, ctx, value))
     ad->epa_flags |= EP_AD_INVALID;
 }
@@ -237,7 +237,7 @@ proc_endpoint_ad_network(const char *key, ep_ad_t *ad,
   common_verify(ad, EP_AD_MAGIC);
 
   /* Convert the network name as a string */
-  if (yaml_get_str(ctx, value, &network, 0)) {
+  if (yaml_get_str(ctx, value, &network, 0, 0)) {
     if (strlen(network) > NETWORK_LEN) {
       yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
 		      "Network name \"%s\" too long; maximum length: %d",
@@ -292,7 +292,7 @@ proc_endpoint_ad(int idx, ep_config_t *endpoint, yaml_ctx_t *ctx,
   if (value->type == YAML_MAPPING_NODE)
     yaml_proc_mapping(ctx, value, ad_config, MAPKEYS_COUNT(ad_config),
 		      (void *)ad);
-  else if (yaml_get_str(ctx, value, &network, 1)) {
+  else if (yaml_get_str(ctx, value, &network, 0, ALLOW_NULL)) {
     if (network) {
       if (strlen(network) > NETWORK_LEN) {
 	yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
@@ -340,7 +340,7 @@ proc_endpoint_ip(const char *key, ep_config_t *endpoint,
   common_verify(endpoint, EP_CONFIG_MAGIC);
 
   /* Convert the IP as a string and set it */
-  if (!yaml_get_str(ctx, value, &pres, 0) ||
+  if (!yaml_get_str(ctx, value, &pres, 0, 0) ||
       !ep_addr_set_ipaddr(&endpoint->epc_addr, pres, ctx, value))
     endpoint->epc_flags |= EP_CONFIG_INVALID;
 }
@@ -354,7 +354,7 @@ proc_endpoint_local(const char *key, ep_config_t *endpoint,
   common_verify(endpoint, EP_CONFIG_MAGIC);
 
   /* Convert the value as a string and set it */
-  if (!yaml_get_str(ctx, value, &path, 0) ||
+  if (!yaml_get_str(ctx, value, &path, 0, 0) ||
       !ep_addr_set_local(&endpoint->epc_addr, path, ctx, value))
     endpoint->epc_flags |= EP_CONFIG_INVALID;
 }
@@ -382,7 +382,7 @@ proc_endpoint_type(const char *key, ep_config_t *endpoint,
   common_verify(endpoint, EP_CONFIG_MAGIC);
 
   /* Convert the value as a string */
-  if (yaml_get_str(ctx, value, &type, 0)) {
+  if (yaml_get_str(ctx, value, &type, 0, 0)) {
     if (!strcmp(type, "client"))
       endpoint->epc_type = ENDPOINT_CLIENT;
     else if (!strcmp(type, "peer"))
@@ -492,7 +492,7 @@ proc_facility(const char *key, config_t *conf, yaml_ctx_t *ctx,
   common_verify(conf, CONFIG_MAGIC);
 
   /* Convert the value as a string */
-  if (yaml_get_str(ctx, value, &name, 0)) {
+  if (yaml_get_str(ctx, value, &name, 0, 0)) {
     if ((facility = log_facility(name)) < 0)
       yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
 		      "Unrecognized facility name \"%s\"", name);
@@ -510,7 +510,7 @@ proc_network_ip(const char *key, ep_network_t *network,
   common_verify(network, EP_NETWORK_MAGIC);
 
   /* Convert the IP as a string and set it */
-  if (!yaml_get_str(ctx, value, &pres, 0) ||
+  if (!yaml_get_str(ctx, value, &pres, 0, 0) ||
       !ep_addr_set_ipaddr(&network->epn_addr, pres, ctx, value))
     network->epn_flags |= EP_NETWORK_INVALID;
 }
@@ -524,7 +524,7 @@ proc_network_network(const char *key, ep_network_t *network,
   common_verify(network, EP_NETWORK_MAGIC);
 
   /* Convert the network name as a string */
-  if (yaml_get_str(ctx, value, &name, 0)) {
+  if (yaml_get_str(ctx, value, &name, 0, 0)) {
     if (strlen(name) > NETWORK_LEN) {
       yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
 		      "Network name \"%s\" too long; maximum length: %d",
@@ -578,7 +578,7 @@ proc_network(int idx, config_t *conf, yaml_ctx_t *ctx, yaml_node_t *value)
   if (value->type == YAML_MAPPING_NODE)
     yaml_proc_mapping(ctx, value, network_config,
 		      MAPKEYS_COUNT(network_config), (void *)network);
-  else if (yaml_get_str(ctx, value, &name, 1)) {
+  else if (yaml_get_str(ctx, value, &name, 0, ALLOW_NULL)) {
     if (name) {
       if (strlen(name) > NETWORK_LEN) {
 	yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
@@ -619,7 +619,7 @@ proc_statedir(const char *key, config_t *conf, yaml_ctx_t *ctx,
   common_verify(conf, CONFIG_MAGIC);
 
   /* Convert the value as a string */
-  if (!yaml_get_str(ctx, value, &dirname, 0))
+  if (!yaml_get_str(ctx, value, &dirname, 0, 0))
     return;
 
   /* Ensure it's a valid path */

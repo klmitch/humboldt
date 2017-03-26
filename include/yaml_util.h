@@ -17,10 +17,32 @@
 #ifndef _HUMBOLDT_YAML_UTIL_H
 #define _HUMBOLDT_YAML_UTIL_H
 
+#include <stdint.h>		/* for uint32_t, intmax_t */
 #include <stdlib.h>		/* for size_t */
 #include <yaml.h>
 
+/* Make sure we have the binary tag available */
+#ifndef YAML_BINARY_TAG
+# define YAML_BINARY_TAG	"tag:yaml.org,2002:binary"
+#endif
+
 #include "configuration.h"	/* for config_t */
+
+/** \brief Scalar node types.
+ *
+ * This enumeration lists the types of scalar nodes that we know
+ * and care about.
+ */
+typedef enum _node_tag_e {
+  NODE_BINARY_TAG,		/**< A !!binary node */
+  NODE_BOOL_TAG,		/**< A !!bool node */
+  NODE_FLOAT_TAG,		/**< A !!float node */
+  NODE_INT_TAG,			/**< A !!int node */
+  NODE_NULL_TAG,		/**< A !!null node */
+  NODE_STR_TAG,			/**< A !!str node */
+  NODE_TIMESTAMP_TAG,		/**< A !!timestamp node */
+  NODE_OTHER_TAG		/**< An unrecognized node */
+} node_tag_t;
 
 /** \brief YAML file context.
  *
@@ -36,6 +58,14 @@ typedef struct _yaml_ctx_s yaml_ctx_t;
  * (a #mapproc_t) required to parse that key.
  */
 typedef struct _mapkeys_s mapkeys_t;
+
+/** \brief Scalar node information.
+ *
+ * This structure is used to express information about a scalar node,
+ * including the actual underlying node type, the inferred node tag,
+ * and its value.
+ */
+typedef struct _node_info_s node_info_t;
 
 /** \brief YAML mapping key processor.
  *
@@ -106,7 +136,8 @@ struct _yaml_ctx_s {
 
 /** \brief YAML mapping keys structure.
  *
- * This structure contains a YAML mapping.
+ * This structure maps a YAML mapping key to the processor for that
+ * key.
  */
 struct _mapkeys_s {
   const char   *mk_key;		/**< Mapping key value */
@@ -129,6 +160,23 @@ struct _mapkeys_s {
  * This macro counts the number of entries in a #mapkeys_t list.
  */
 #define MAPKEYS_COUNT(list)	(sizeof((list)) / sizeof(mapkeys_t))
+
+/** \brief YAML scalar node information structure.
+ *
+ * This structure describes the information known about a YAML scalar
+ * node.
+ */
+struct _node_info_s {
+  node_tag_t		ni_type;	/**< Type of node */
+  const char	       *ni_tag;		/**< Node's tag */
+  union {
+    intmax_t		nid_int;	/**< Integer value of node */
+    struct {
+      const char       *nids_value;	/**< String value of node */
+      size_t		nids_length;	/**< Length of string data */
+    }			nid_str;	/**< String value of node */
+  }			ni_data;	/**< Node data */
+};
 
 /** \brief Push a path element.
  *
@@ -205,6 +253,21 @@ void yaml_proc_sequence(yaml_ctx_t *ctx, yaml_node_t *seq,
 void yaml_proc_mapping(yaml_ctx_t *ctx, yaml_node_t *map,
 		       mapkeys_t *keys, size_t keycnt, void *dest);
 
+/** \brief Get information from a scalar node.
+ *
+ * Examines a scalar node and assembles information on that node,
+ * including its value.
+ *
+ * \param[in]		ctx	The YAML file context.
+ * \param[in]		scalar	A YAML scalar node.
+ * \param[in,out]	info	A pointer to an allocated node
+ *				information structure to contain the
+ *				node information.
+ *
+ * \return	A false value if an error occurred, true otherwise.
+ */
+int yaml_get_scalar(yaml_ctx_t *ctx, yaml_node_t *scalar, node_info_t *info);
+
 /** \brief Get a boolean YAML node value.
  *
  * Determine the value of a boolean YAML node.
@@ -239,13 +302,35 @@ int yaml_get_int(yaml_ctx_t *ctx, yaml_node_t *node, long *dest);
  * \param[in]		node	The YAML node.
  * \param[out]		dest	A pointer to a character pointer to
  *				fill in with the string value.
- * \param[in]		allow_null
- *				If true, a \c NULL value is allowed.
+ * \param[in,out]	len	A pointer to fill in the length of the
+ *				string or binary data.  May be \c
+ *				NULL.
+ * \param[in]		flags	Flags controlling whether to accept
+ *				other nodes than string, such as null
+ *				(\c ALLOW_NULL) or binary (\c
+ *				ALLOW_BINARY).
  *
  * \return	A false value if an error occurred, true otherwise.
+ *		If the value is greater than 1, this indicates that
+ *		the value placed in \p dest points to allocated
+ *		memory.
  */
 int yaml_get_str(yaml_ctx_t *ctx, yaml_node_t *node, const char **dest,
-		 int allow_null);
+		 size_t *len, uint32_t flags);
+
+/** \brief Allow converting null nodes.
+ *
+ * This flag, if passed in the \c flags parameter of yaml_get_str(),
+ * indicates that the function may utilize null nodes.
+ */
+#define ALLOW_NULL		0x80000000
+
+/** \brief Allow converting binary nodes.
+ *
+ * This flag, if passed in the \c flags parameter of yaml_get_str(),
+ * indicates that the function may utilize binary nodes.
+ */
+#define ALLOW_BINARY		0x40000000
 
 /** \brief Read a mapping from a named file.
  *
