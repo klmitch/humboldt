@@ -17,6 +17,7 @@
 #include <config.h>
 
 #include <arpa/inet.h>
+#include <event2/util.h>
 #include <stdint.h>
 #include <string.h>
 #include <syslog.h>
@@ -110,7 +111,7 @@ ep_addr_set_ipaddr(ep_addr_t *addr, const char *pres,
     port = addr->ea_addr.eau_ip4.sin_port;
 
   /* Try converting it as IPv4 */
-  if (inet_pton(AF_INET, pres, &addr->ea_addr.eau_ip4.sin_addr)) {
+  if (evutil_inet_pton(AF_INET, pres, &addr->ea_addr.eau_ip4.sin_addr)) {
     addr->ea_flags |= EA_IPADDR;
     addr->ea_addr.eau_ip4.sin_family = AF_INET;
     if (addr->ea_flags & EA_PORT)
@@ -122,7 +123,7 @@ ep_addr_set_ipaddr(ep_addr_t *addr, const char *pres,
 
 #ifdef AF_INET6
   /* Try converting it as IPv6 */
-  if (inet_pton(AF_INET6, pres, &addr->ea_addr.eau_ip6.sin6_addr)) {
+  if (evutil_inet_pton(AF_INET6, pres, &addr->ea_addr.eau_ip6.sin6_addr)) {
     addr->ea_flags |= EA_IPADDR;
     addr->ea_addr.eau_ip6.sin6_family = AF_INET6;
     if (addr->ea_flags & EA_PORT)

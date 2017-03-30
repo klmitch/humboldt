@@ -16,7 +16,7 @@
 
 #include <config.h>
 
-#include <arpa/inet.h>
+#include <event2/util.h>
 #include <sys/un.h>
 
 #include "include/alloc.h"
@@ -59,8 +59,8 @@ emit_addr(config_t *conf, ep_addr_t *addr, const char *pfx)
 
     if (addr->ea_flags & EA_IPADDR)
       log_emit(conf, LOG_DEBUG, "%sIPv%d address: %s", pfx, version,
-	       inet_ntop(addr->ea_addr.eau_addr.sa_family, ipaddr, addr_buf,
-			 sizeof(addr_buf)));
+	       evutil_inet_ntop(addr->ea_addr.eau_addr.sa_family, ipaddr,
+				addr_buf, sizeof(addr_buf)));
     if (addr->ea_flags & EA_PORT)
       log_emit(conf, LOG_DEBUG, "%sPort: %d", pfx, ntohs(port));
   }

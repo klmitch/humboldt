@@ -43,6 +43,7 @@ PKG_PROG_PKG_CONFIG
 dnl Checks for libraries
 AX_LIB_SOCKET_NSL
 HUMBOLDT_PC_LIBRARY([YAML], [yaml-0.1])
+HUMBOLDT_PC_LIBRARY([LIBEVENT], [libevent])
 
 dnl Checks for header files
 
