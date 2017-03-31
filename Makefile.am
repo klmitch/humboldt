@@ -28,10 +28,12 @@ humboldt_SOURCES = \
 	include/configuration.h \
 	include/endpoint.h \
 	include/log.h \
+	include/runtime.h \
 	include/yaml_util.h \
 	src/alloc.c \
 	src/configuration.c \
 	src/endpoint.c \
 	src/log.c \
 	src/main.c \
+	src/runtime.c \
 	src/yaml_util.c

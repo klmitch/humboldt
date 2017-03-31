@@ -23,6 +23,7 @@
 #include "include/endpoint.h"
 #include "include/configuration.h"
 #include "include/log.h"
+#include "include/runtime.h"
 
 static void
 emit_addr(config_t *conf, ep_addr_t *addr, const char *pfx)
@@ -70,6 +71,7 @@ int
 main(int argc, char **argv)
 {
   config_t conf = CONFIG_INIT();
+  runtime_t runtime;
 
   initialize_config(&conf, argc, argv);
 
@@ -134,6 +136,12 @@ main(int argc, char **argv)
 	     network->epn_name : "<Public>");
 
     emit_addr(&conf, &network->epn_addr, "    ");
+  }
+
+  /* Initialize the runtime */
+  if (!initialize_runtime(&runtime, &conf)) {
+    log_emit(&conf, LOG_ERR, "Failed to initialize runtime, exiting...");
+    exit(EXIT_FAILURE);
   }
 
   return 0;

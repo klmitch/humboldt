@@ -17,6 +17,7 @@
 #include <config.h>
 
 #include <assert.h>
+#include <event2/event.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -166,7 +167,8 @@ log_vemit(config_t *conf, int priority, const char *fmt, va_list ap)
   fflush(stream);
 }
 
-void log_emit(config_t *conf, int priority, const char *fmt, ...)
+void
+log_emit(config_t *conf, int priority, const char *fmt, ...)
 {
   va_list ap;
 
@@ -198,4 +200,30 @@ log_close(config_t *conf)
 
   /* Reset the initialization state. */
   conf->cf_flags &= ~CONFIG_LOG_INITIALIZED;
+}
+
+static config_t *_ev_conf;
+
+/* Map of libevent severity to syslog priority */
+static int severity_map[] = {
+  LOG_DEBUG,	/* EVENT_LOG_DEBUG */
+  LOG_NOTICE,	/* EVENT_LOG_MSG */
+  LOG_WARNING,	/* EVENT_LOG_WARN */
+  LOG_ERR	/* EVENT_LOG_ERR */
+};
+
+static void
+log_event_cb(int severity, const char *msg)
+{
+  log_emit(_ev_conf, severity_map[severity], "libevent: %s", msg);
+}
+
+void
+log_libevent_init(config_t *conf)
+{
+  /* Save the config */
+  _ev_conf = conf;
+
+  /* Register our libevent logging callback */
+  event_set_log_callback(log_event_cb);
 }

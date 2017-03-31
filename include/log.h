@@ -100,4 +100,13 @@ void log_reinit(config_t *conf);
  */
 void log_close(config_t *conf);
 
+/** \brief Initialize logging for libevent.
+ *
+ * This call initializes libevent's logging callback to utilize our
+ * log_emit() function.
+ *
+ * \param[in]		conf	The configuration.
+ */
+void log_libevent_init(config_t *conf);
+
 #endif /* _HUMBOLDT_LOG_H */
