@@ -70,6 +70,7 @@ ep_addr_set_local(ep_addr_t *addr, const char *path,
   }
 
   /* Save the path */
+  addr->ea_addr.eau_local.sun_family = AF_LOCAL;
   strcpy(addr->ea_addr.eau_local.sun_path, path);
   addr->ea_flags = EA_LOCAL;
   addr->ea_addrlen = SUN_LEN(&addr->ea_addr.eau_local);
