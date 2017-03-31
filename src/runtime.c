@@ -20,6 +20,8 @@
 #include <event2/event.h>
 #include <string.h>
 
+#include "include/alloc.h"
+#include "include/endpoint.h"
 #include "include/configuration.h"
 #include "include/log.h"
 #include "include/runtime.h"
@@ -27,6 +29,9 @@
 int
 initialize_runtime(runtime_t *runtime, config_t *conf)
 {
+  int i, tmp;
+  int clients = 0, peers = 0, total = 0;
+
   /* Initialize event logging */
   log_libevent_init(conf);
 
@@ -39,6 +44,26 @@ initialize_runtime(runtime_t *runtime, config_t *conf)
   } else
     log_emit(conf, LOG_INFO, "Libevent initialized with method %s",
 	     event_base_get_method(runtime->rt_evbase));
+
+  /* Initialize the endpoints list */
+  flexlist_init(&runtime->rt_endpoints, endpoint_t);
+
+  /* Open all the endpoints */
+  for (i = 0; i < flexlist_count(&conf->cf_endpoints); i++) {
+    ep_config_t *epconf = (ep_config_t *)flexlist_item(&conf->cf_endpoints, i);
+
+    tmp = endpoint_create(runtime, epconf);
+    total += tmp;
+
+    /* Increment the correct count */
+    if (epconf->epc_type == ENDPOINT_CLIENT)
+      peers += tmp;
+    else if (epconf->epc_type == ENDPOINT_PEER)
+      clients += tmp;
+  }
+
+  log_emit(conf, LOG_INFO, "Opened %d client and %d peer endpoints (%d total)",
+	   clients, peers, total);
 
   /* Set the magic number last */
   runtime->rt_magic = RUNTIME_MAGIC;

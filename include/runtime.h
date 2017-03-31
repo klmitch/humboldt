@@ -17,6 +17,7 @@
 #ifndef _HUMBOLDT_RUNTIME_H
 #define _HUMBOLDT_RUNTIME_H
 
+#include "alloc.h"		/* for flexlist_t */
 #include "common.h"		/* for magic_t */
 #include "configuration.h"	/* for config_t */
 
@@ -36,6 +37,7 @@ struct _runtime_s {
   magic_t		rt_magic;	/**< Magic number */
   config_t	       *rt_config;	/**< Configuration */
   struct event_base    *rt_evbase;	/**< Libevent event loop */
+  flexlist_t		rt_endpoints;	/**< Open endpoints */
 };
 
 /** \brief Runtime magic number.

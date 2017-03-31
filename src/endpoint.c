@@ -17,14 +17,19 @@
 #include <config.h>
 
 #include <arpa/inet.h>
+#include <errno.h>
+#include <event2/listener.h>
 #include <event2/util.h>
 #include <stdint.h>
 #include <string.h>
 #include <syslog.h>
 #include <sys/un.h>
+#include <unistd.h>
 
 #include "include/common.h"
 #include "include/endpoint.h"
+#include "include/log.h"
+#include "include/runtime.h"
 #include "include/yaml_util.h"
 
 int
@@ -347,4 +352,71 @@ ep_network_release(ep_network_t *network)
 
   /* Zero the magic number */
   network->epn_magic = 0;
+}
+
+static int
+_endpoint_create(runtime_t *runtime, ep_config_t *config, ep_addr_t *addr)
+{
+  char address[ADDR_DESCRIPTION], conf_addr[ADDR_DESCRIPTION] = "";
+  endpoint_t *endpoint;
+
+  ep_addr_describe(addr, address, sizeof(address));
+  if (addr != &config->epc_addr)
+    snprintf(conf_addr, sizeof(conf_addr), " (configured as %s)",
+	     ep_addr_describe(&config->epc_addr, conf_addr,
+			      sizeof(conf_addr)));
+
+  log_emit(runtime->rt_config, LOG_DEBUG, "Creating endpoint for %s%s",
+	   address, conf_addr);
+
+  /* Allocate an item */
+  if (!(endpoint = flexlist_append(&runtime->rt_endpoints))) {
+    log_emit(runtime->rt_config, LOG_WARNING,
+	     "Out of memory creating endpoint %s%s", address, conf_addr);
+    return 0;
+  }
+
+  /* Initialize the endpoint */
+  endpoint->ep_addr = *addr;
+  endpoint->ep_config = config;
+
+#ifdef AF_LOCAL
+  /* Make sure the local socket is unlinked */
+  if (addr->ea_flags & EA_LOCAL)
+    unlink(endpoint->ep_addr.ea_addr.eau_local.sun_path);
+#endif
+
+  /* Create the listening socket */
+  if (!(endpoint->ep_listener = evconnlistener_new_bind(
+	  runtime->rt_evbase, 0, endpoint,
+	  LEV_OPT_REUSEABLE, -1, &endpoint->ep_addr.ea_addr.eau_addr,
+	  endpoint->ep_addr.ea_addrlen))) {
+    log_emit(runtime->rt_config, LOG_WARNING,
+	     "Failed to create a listening socket on %s%s: %s",
+	     address, conf_addr, strerror(errno));
+    flexlist_pop(&runtime->rt_endpoints);
+    return 0;
+  }
+
+  return 1;
+}
+
+int
+endpoint_create(runtime_t *runtime, ep_config_t *config)
+{
+  int cnt = 0;
+
+  common_verify(config, EP_CONFIG_MAGIC);
+
+  /* Is it an all-zeros interface? */
+  if (!(config->epc_addr.ea_flags & (EA_IPADDR | EA_LOCAL))) {
+    log_emit(runtime->rt_config, LOG_ERR,
+	     "Don't know how to open the all-zeros endpoint yet");
+    return cnt;
+
+  /* Open the single port */
+  } else if (_endpoint_create(runtime, config, &config->epc_addr))
+      cnt++;
+
+  return cnt;
 }

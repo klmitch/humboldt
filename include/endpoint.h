@@ -26,6 +26,7 @@
 
 #include "alloc.h"		/* for flexlist_t */
 #include "common.h"		/* for magic_t */
+#include "runtime.h"		/* for runtime_t */
 
 /* Ensure we have AF_LOCAL if possible */
 #if !defined(AF_LOCAL) && defined(AF_UNIX)
@@ -40,6 +41,13 @@
  * other endpoint structures, including the #ep_network_t structure.
  */
 typedef struct _ep_addr_s ep_addr_t;
+
+/** \brief Endpoint.
+ *
+ * Represents an endpoint.  An endpoint is an active listening socket,
+ * along with associated configuration.
+ */
+typedef struct _endpoint_s endpoint_t;
 
 /** \brief Endpoint advertisement.
  *
@@ -145,6 +153,26 @@ struct _ep_addr_s {
   } while (0)
 
 #define NETWORK_LEN	16
+
+/** \brief Endpoint structure.
+ *
+ * This structure contains the representation of an endpoint.
+ */
+struct _endpoint_s {
+  magic_t	ep_magic;	/**< Magic number */
+  ep_addr_t	ep_addr;	/**< Bound address */
+  ep_config_t  *ep_config;	/**< Configuration associated with endpoint */
+  struct evconnlistener
+	       *ep_listener;	/**< Libevent listener for endpoint */
+};
+
+/** \brief Endpoint magic number.
+ *
+ * This is the magic number used for the endpoint structure.  It is
+ * used to guard against programming problems, such as failure to
+ * initialize an endpoint.
+ */
+#define ENDPOINT_MAGIC 0xf0fff1da
 
 /** \brief Endpoint advertisement structure.
  *
@@ -406,5 +434,17 @@ void ep_config_release(ep_config_t *endpoint);
  * \param[in,out]	network	The endpoint network to release.
  */
 void ep_network_release(ep_network_t *network);
+
+/** \brief Create an endpoint.
+ *
+ * This function creates one or more endpoints from the associated
+ * configuration.
+ *
+ * \param[in,out]	runtime	The runtime.
+ * \param[in]		config	The endpoint configuration.
+ *
+ * \return	The number of endpoints successfully created.
+ */
+int endpoint_create(runtime_t *runtime, ep_config_t *config);
 
 #endif /* _HUMBOLDT_ENDPOINT_H */
