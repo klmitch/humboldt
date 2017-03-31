@@ -351,6 +351,32 @@ int ep_addr_set_port(ep_addr_t *addr, int port,
  */
 void ep_addr_default(ep_addr_t *dest, ep_addr_t *src);
 
+/** \brief Describe an address.
+ *
+ * Fills a buffer with a description of the socket.  For local
+ * addresses, this will be the socket path enclosed in square brackets
+ * ("[]").  For plain ports with no address, this will be of the form
+ * "[]:1234", with the port number following the colon ("1234" in the
+ * example).  For IPv4 addresses, this will be of the form
+ * "127.0.0.1:1234", and for IPv6 addresses, this will be of the form
+ * "[::1]:1234", again with the port number following the last colon.
+ * If the port number is unspecified, it will be 0.
+ *
+ * \param[in]		addr	The address to describe.
+ * \param[in,out]	buf	The buffer to place the address into.
+ * \param[in]		buflen	The size of the buffer.
+ *
+ * \return	A pointer to \p addr, for convenience.
+ */
+const char *ep_addr_describe(ep_addr_t *addr, char *buf, size_t buflen);
+
+/** \brief Address description buffer size.
+ *
+ * This is a suggested amount of memory to set aside for an address
+ * description.
+ */
+#define ADDR_DESCRIPTION	256
+
 /** \brief Release endpoint advertisement.
  *
  * This function ensures that all memory allocated to represent a

@@ -265,6 +265,51 @@ ep_addr_default(ep_addr_t *dest, ep_addr_t *src)
 #endif
 }
 
+const char *
+ep_addr_describe(ep_addr_t *addr, char *buf, size_t buflen)
+{
+  const void *ipaddr;
+  const char *br_open = "", *br_close = "";
+  int port;
+#ifdef INET6_ADDRSTRLEN
+  char addr_buf[INET6_ADDRSTRLEN + 1];
+#else
+  char addr_buf[INET_ADDRSTRLEN + 1];
+#endif
+
+  if (addr->ea_flags & EA_INVALID)
+    snprintf(buf, buflen, "Invalid address");
+#ifdef AF_LOCAL
+  else if (addr->ea_flags & EA_LOCAL)
+    snprintf(buf, buflen, "[%s]", addr->ea_addr.eau_local.sun_path);
+#endif
+  else if (!(addr->ea_flags & EA_IPADDR))
+    snprintf(buf, buflen, "[]:%d", (addr->ea_flags & EA_PORT) ?
+	     ntohs(addr->ea_addr.eau_ip4.sin_port) : 0);
+  else {
+#ifdef AF_INET6
+    if (addr->ea_addr.eau_addr.sa_family == AF_INET6) {
+      br_open = "[";
+      br_close = "]";
+      ipaddr = (void *)&addr->ea_addr.eau_ip6.sin6_addr;
+      port = addr->ea_addr.eau_ip6.sin6_port;
+    } else {
+#endif
+      ipaddr = (void *)&addr->ea_addr.eau_ip4.sin_addr;
+      port = addr->ea_addr.eau_ip4.sin_port;
+#ifdef AF_INET6
+    }
+#endif
+
+    snprintf(buf, buflen, "%s%s%s:%d", br_open,
+	     evutil_inet_ntop(addr->ea_addr.eau_addr.sa_family, ipaddr,
+			      addr_buf, sizeof(addr_buf)),
+	     br_close, (addr->ea_flags & EA_PORT) ? ntohs(port) : 0);
+  }
+
+  return buf;
+}
+
 void
 ep_ad_release(ep_ad_t *ad)
 {
