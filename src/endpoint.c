@@ -116,6 +116,9 @@ ep_addr_set_ipaddr(ep_addr_t *addr, const char *pres,
   if (addr->ea_flags & EA_PORT)
     port = addr->ea_addr.eau_ip4.sin_port;
 
+  /* Before anything else, clear the address structure */
+  memset(&addr->ea_addr, 0, sizeof(addr->ea_addr));
+
   /* Try converting it as IPv4 */
   if (evutil_inet_pton(AF_INET, pres, &addr->ea_addr.eau_ip4.sin_addr)) {
     addr->ea_flags |= EA_IPADDR;
