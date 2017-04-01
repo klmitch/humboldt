@@ -26,6 +26,7 @@ humboldt_SOURCES = \
 	include/alloc.h \
 	include/common.h \
 	include/configuration.h \
+	include/db.h \
 	include/endpoint.h \
 	include/log.h \
 	include/runtime.h \

@@ -26,6 +26,7 @@
 
 #include "alloc.h"		/* for flexlist_t */
 #include "common.h"		/* for magic_t */
+#include "db.h"			/* for link_elem_t */
 #include "runtime.h"		/* for runtime_t */
 
 /* Ensure we have AF_LOCAL if possible */
@@ -160,6 +161,7 @@ struct _ep_addr_s {
  */
 struct _endpoint_s {
   magic_t	ep_magic;	/**< Magic number */
+  link_elem_t	ep_link;	/**< Linked list element */
   ep_addr_t	ep_addr;	/**< Bound address */
   ep_config_t  *ep_config;	/**< Configuration associated with endpoint */
   struct evconnlistener

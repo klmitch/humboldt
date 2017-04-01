@@ -26,11 +26,15 @@
 #include <sys/un.h>
 #include <unistd.h>
 
+#include "include/alloc.h"
 #include "include/common.h"
+#include "include/db.h"
 #include "include/endpoint.h"
 #include "include/log.h"
 #include "include/runtime.h"
 #include "include/yaml_util.h"
+
+static freelist_t endpoints = FREELIST_INIT(endpoint_t, 0);
 
 int
 ep_addr_set_local(ep_addr_t *addr, const char *path,
@@ -431,13 +435,14 @@ _endpoint_create(runtime_t *runtime, ep_config_t *config, ep_addr_t *addr)
 	   address, conf_addr);
 
   /* Allocate an item */
-  if (!(endpoint = flexlist_append(&runtime->rt_endpoints))) {
+  if (!(endpoint = alloc(&endpoints))) {
     log_emit(runtime->rt_config, LOG_WARNING,
 	     "Out of memory creating endpoint %s%s", address, conf_addr);
     return 0;
   }
 
   /* Initialize the endpoint */
+  link_elem_init(&endpoint->ep_link, endpoint);
   endpoint->ep_addr = *addr;
   endpoint->ep_config = config;
   endpoint->ep_runtime = runtime;
@@ -456,9 +461,12 @@ _endpoint_create(runtime_t *runtime, ep_config_t *config, ep_addr_t *addr)
     log_emit(runtime->rt_config, LOG_WARNING,
 	     "Failed to create a listening socket on %s%s: %s",
 	     address, configured, strerror(errno));
-    flexlist_pop(&runtime->rt_endpoints);
+    release(&endpoints, endpoint);
     return 0;
   }
+
+  /* Add it to the list of endpoints */
+  link_append(&runtime->rt_endpoints, &endpoint->ep_link);
 
   return 1;
 }

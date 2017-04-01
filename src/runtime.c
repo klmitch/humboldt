@@ -55,7 +55,7 @@ initialize_runtime(runtime_t *runtime, config_t *conf)
 	     event_base_get_method(runtime->rt_evbase));
 
   /* Initialize the endpoints list */
-  flexlist_init(&runtime->rt_endpoints, endpoint_t);
+  link_head_init(&runtime->rt_endpoints);
 
   /* Open all the endpoints */
   for (i = 0; i < flexlist_count(&conf->cf_endpoints); i++) {
