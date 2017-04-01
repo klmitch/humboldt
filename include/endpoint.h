@@ -371,6 +371,19 @@ int ep_addr_set_ipaddr(ep_addr_t *addr, const char *pres,
 int ep_addr_set_port(ep_addr_t *addr, int port,
 		     yaml_ctx_t *ctx, yaml_node_t *value);
 
+/** \brief Set address from a socket address.
+ *
+ * Sets the full address from a <CODE>struct sockaddr</CODE>.
+ *
+ * \param[in,out]	addr	The address structure to be updated.
+ * \param[in]		sockaddr
+ *				The <CODE>struct sockaddr</CODE> to
+ *				use to fill in the address.
+ * \param[in]		addrlen	The size of the \p sockaddr.
+ */
+void ep_addr_set_fromaddr(ep_addr_t *addr, struct sockaddr *sockaddr,
+			  int addrlen);
+
 /** \brief Copy address default.
  *
  * Fill in the unprovided portions of \p dest from \p src.

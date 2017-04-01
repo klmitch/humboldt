@@ -200,6 +200,32 @@ ep_addr_set_port(ep_addr_t *addr, int port,
 }
 
 void
+ep_addr_set_fromaddr(ep_addr_t *addr, struct sockaddr *sockaddr, int addrlen)
+{
+  /* Initialize the address */
+  ep_addr_init(addr);
+
+  /* Save the address length (the easy part) */
+  addr->ea_addrlen = addrlen;
+
+  /* Save the address itself (the hard part) */
+#ifdef AF_LOCAL
+  if (sockaddr->sa_family == AF_LOCAL) {
+    addr->ea_addr.eau_local = *((struct sockaddr_un *)sockaddr);
+    addr->ea_flags |= EA_LOCAL;
+    return;
+  }
+#endif
+#ifdef AF_INET6
+    if (sockaddr->sa_family == AF_INET6)
+      addr->ea_addr.eau_ip6 = *((struct sockaddr_in6 *)sockaddr);
+    else
+#endif
+      addr->ea_addr.eau_ip4 = *((struct sockaddr_in *)sockaddr);
+    addr->ea_flags |= EA_IPADDR | EA_PORT;
+}
+
+void
 ep_addr_default(ep_addr_t *dest, ep_addr_t *src)
 {
   uint16_t port = 0;
