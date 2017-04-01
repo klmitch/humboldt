@@ -102,5 +102,17 @@ main(int argc, char **argv)
     exit(EXIT_FAILURE);
   }
 
+  /* Run Humboldt */
+  switch (run(&runtime)) {
+  case -1:
+    log_emit(&conf, LOG_ERR, "Unhandled error in Libevent, exiting...");
+    exit(EXIT_FAILURE);
+    break;
+
+  default:
+    log_emit(&conf, LOG_NOTICE, "Exiting event loop");
+    break;
+  }
+
   return 0;
 }

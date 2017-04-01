@@ -86,3 +86,9 @@ initialize_runtime(runtime_t *runtime, config_t *conf)
   runtime->rt_magic = RUNTIME_MAGIC;
   return 1;
 }
+
+int
+run(runtime_t *runtime)
+{
+  return event_base_loop(runtime->rt_evbase, 0);
+}

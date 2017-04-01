@@ -64,4 +64,12 @@ struct _runtime_s {
  */
 int initialize_runtime(runtime_t *runtime, config_t *conf);
 
+/** \brief Run Humboldt.
+ *
+ * This is the core loop for Humboldt.
+ *
+ * \param[in]		runtime	The runtime to run.
+ */
+int run(runtime_t *runtime);
+
 #endif /* _HUMBOLDT_RUNTIME_H */
