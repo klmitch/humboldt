@@ -383,6 +383,37 @@ ep_network_release(ep_network_t *network)
   network->epn_magic = 0;
 }
 
+static void
+_endpoint_listener(struct evconnlistener *listener, evutil_socket_t sock,
+		   struct sockaddr *addr, int addrlen, endpoint_t *endpoint)
+{
+  char address[ADDR_DESCRIPTION];
+  char ep_addr[ADDR_DESCRIPTION], conf_addr[ADDR_DESCRIPTION];
+  char configured[ADDR_DESCRIPTION + sizeof(" (configured as )")] = "";
+  ep_addr_t cliaddr;
+
+  /* Describe the endpoint and configuration addresses */
+  ep_addr_describe(&endpoint->ep_addr, ep_addr, sizeof(ep_addr));
+  if (memcmp(&endpoint->ep_addr, &endpoint->ep_config->epc_addr,
+	     sizeof(ep_addr_t)))
+    snprintf(configured, sizeof(configured), " (configured as %s)",
+	     ep_addr_describe(&endpoint->ep_config->epc_addr, conf_addr,
+			      sizeof(conf_addr)));
+
+  /* Construct the address of the client */
+  ep_addr_set_fromaddr(&cliaddr, addr, addrlen);
+  ep_addr_describe(&cliaddr, address, sizeof(address));
+
+  log_emit(endpoint->ep_runtime->rt_config, LOG_INFO,
+	   "Connection from %s at %s on endpoint %s%s",
+	   (endpoint->ep_config->epc_type == ENDPOINT_CLIENT ? "client" :
+	    (endpoint->ep_config->epc_type == ENDPOINT_PEER ? "peer" :
+	     "unknown")), address, ep_addr, configured);
+
+  /* Right now, just close the connection */
+  evutil_closesocket(sock);
+}
+
 static int
 _endpoint_create(runtime_t *runtime, ep_config_t *config, ep_addr_t *addr)
 {
@@ -419,7 +450,7 @@ _endpoint_create(runtime_t *runtime, ep_config_t *config, ep_addr_t *addr)
 
   /* Create the listening socket */
   if (!(endpoint->ep_listener = evconnlistener_new_bind(
-	  runtime->rt_evbase, 0, endpoint,
+	  runtime->rt_evbase, (evconnlistener_cb)_endpoint_listener, endpoint,
 	  LEV_OPT_REUSEABLE, -1, &endpoint->ep_addr.ea_addr.eau_addr,
 	  endpoint->ep_addr.ea_addrlen))) {
     log_emit(runtime->rt_config, LOG_WARNING,
