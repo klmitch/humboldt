@@ -26,6 +26,7 @@ humboldt_SOURCES = \
 	include/alloc.h \
 	include/common.h \
 	include/configuration.h \
+	include/connection.h \
 	include/db.h \
 	include/endpoint.h \
 	include/log.h \
@@ -33,6 +34,7 @@ humboldt_SOURCES = \
 	include/yaml_util.h \
 	src/alloc.c \
 	src/configuration.c \
+	src/connection.c \
 	src/endpoint.c \
 	src/log.c \
 	src/main.c \

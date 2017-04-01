@@ -54,8 +54,9 @@ initialize_runtime(runtime_t *runtime, config_t *conf)
     log_emit(conf, LOG_INFO, "Libevent initialized with method %s",
 	     event_base_get_method(runtime->rt_evbase));
 
-  /* Initialize the endpoints list */
+  /* Initialize the endpoints and connections lists */
   link_head_init(&runtime->rt_endpoints);
+  link_head_init(&runtime->rt_connections);
 
   /* Open all the endpoints */
   for (i = 0; i < flexlist_count(&conf->cf_endpoints); i++) {

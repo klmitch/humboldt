@@ -28,6 +28,7 @@
 
 #include "include/alloc.h"
 #include "include/common.h"
+#include "include/connection.h"
 #include "include/db.h"
 #include "include/endpoint.h"
 #include "include/log.h"
@@ -394,6 +395,7 @@ _endpoint_listener(struct evconnlistener *listener, evutil_socket_t sock,
   char address[ADDR_DESCRIPTION];
   char ep_addr[ADDR_DESCRIPTION], conf_addr[ADDR_DESCRIPTION];
   char configured[ADDR_DESCRIPTION + sizeof(" (configured as )")] = "";
+  const char *type;
   ep_addr_t cliaddr;
 
   /* Describe the endpoint and configuration addresses */
@@ -403,6 +405,9 @@ _endpoint_listener(struct evconnlistener *listener, evutil_socket_t sock,
     snprintf(configured, sizeof(configured), " (configured as %s)",
 	     ep_addr_describe(&endpoint->ep_config->epc_addr, conf_addr,
 			      sizeof(conf_addr)));
+  type = (endpoint->ep_config->epc_type == ENDPOINT_CLIENT ? "client" :
+	  (endpoint->ep_config->epc_type == ENDPOINT_PEER ? "peer" :
+	   "unknown"));
 
   /* Construct the address of the client */
   ep_addr_set_fromaddr(&cliaddr, addr, addrlen);
@@ -410,12 +415,10 @@ _endpoint_listener(struct evconnlistener *listener, evutil_socket_t sock,
 
   log_emit(endpoint->ep_runtime->rt_config, LOG_INFO,
 	   "Connection from %s at %s on endpoint %s%s",
-	   (endpoint->ep_config->epc_type == ENDPOINT_CLIENT ? "client" :
-	    (endpoint->ep_config->epc_type == ENDPOINT_PEER ? "peer" :
-	     "unknown")), address, ep_addr, configured);
+	   type, address, ep_addr, configured);
 
-  /* Right now, just close the connection */
-  evutil_closesocket(sock);
+  /* Create the connection; responsibility for sock passes here */
+  connection_create(endpoint->ep_runtime, endpoint, sock, &cliaddr);
 }
 
 static int
@@ -464,6 +467,9 @@ _endpoint_create(runtime_t *runtime, ep_config_t *config, ep_addr_t *addr)
     release(&endpoints, endpoint);
     return 0;
   }
+
+  /* Set the magic number, now that it's valid */
+  endpoint->ep_magic = ENDPOINT_MAGIC;
 
   /* Add it to the list of endpoints */
   link_append(&runtime->rt_endpoints, &endpoint->ep_link);

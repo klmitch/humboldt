@@ -39,6 +39,7 @@ struct _runtime_s {
   config_t	       *rt_config;	/**< Configuration */
   struct event_base    *rt_evbase;	/**< Libevent event loop */
   link_head_t		rt_endpoints;	/**< Open endpoints */
+  link_head_t		rt_connections;	/**< Open connections */
   struct event	       *rt_inthandle;	/**< SIGINT handler */
 };
 
