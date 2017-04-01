@@ -386,16 +386,17 @@ ep_network_release(ep_network_t *network)
 static int
 _endpoint_create(runtime_t *runtime, ep_config_t *config, ep_addr_t *addr)
 {
-  char address[ADDR_DESCRIPTION], conf_addr[ADDR_DESCRIPTION] = "";
+  char address[ADDR_DESCRIPTION], conf_addr[ADDR_DESCRIPTION];
+  char configured[ADDR_DESCRIPTION + sizeof(" (configured as )")] = "";
   endpoint_t *endpoint;
 
   ep_addr_describe(addr, address, sizeof(address));
   if (addr != &config->epc_addr)
-    snprintf(conf_addr, sizeof(conf_addr), " (configured as %s)",
+    snprintf(configured, sizeof(configured), " (configured as %s)",
 	     ep_addr_describe(&config->epc_addr, conf_addr,
 			      sizeof(conf_addr)));
 
-  log_emit(runtime->rt_config, LOG_DEBUG, "Creating endpoint for %s%s",
+  log_emit(runtime->rt_config, LOG_INFO, "Creating endpoint for %s%s",
 	   address, conf_addr);
 
   /* Allocate an item */
@@ -423,7 +424,7 @@ _endpoint_create(runtime_t *runtime, ep_config_t *config, ep_addr_t *addr)
 	  endpoint->ep_addr.ea_addrlen))) {
     log_emit(runtime->rt_config, LOG_WARNING,
 	     "Failed to create a listening socket on %s%s: %s",
-	     address, conf_addr, strerror(errno));
+	     address, configured, strerror(errno));
     flexlist_pop(&runtime->rt_endpoints);
     return 0;
   }
@@ -446,7 +447,7 @@ endpoint_create(runtime_t *runtime, ep_config_t *config)
 
   /* Open the single port */
   } else if (_endpoint_create(runtime, config, &config->epc_addr))
-      cnt++;
+    cnt++;
 
   return cnt;
 }
