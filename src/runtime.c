@@ -18,6 +18,8 @@
 
 #include <errno.h>
 #include <event2/event.h>
+#include <event2/util.h>
+#include <signal.h>
 #include <string.h>
 
 #include "include/alloc.h"
@@ -25,6 +27,13 @@
 #include "include/configuration.h"
 #include "include/log.h"
 #include "include/runtime.h"
+
+static void
+handle_sigint(evutil_socket_t signum, short event, runtime_t *runtime)
+{
+  log_emit(runtime->rt_config, LOG_NOTICE, "Received SIGINT; terminating");
+  event_base_loopexit(runtime->rt_evbase, 0);
+}
 
 int
 initialize_runtime(runtime_t *runtime, config_t *conf)
@@ -64,6 +73,14 @@ initialize_runtime(runtime_t *runtime, config_t *conf)
 
   log_emit(conf, LOG_INFO, "Opened %d client and %d peer endpoints (%d total)",
 	   clients, peers, total);
+
+  /* Set up the SIGINT handler */
+  if (!(runtime->rt_inthandle = evsignal_new(runtime->rt_evbase, SIGINT,
+					     (event_callback_fn)handle_sigint,
+					     runtime)))
+    log_emit(conf, LOG_WARNING, "Failed to initialize SIGINT handler");
+  else if (evsignal_add(runtime->rt_inthandle, 0))
+    log_emit(conf, LOG_WARNING, "Failed to add SIGINT handler");
 
   /* Set the magic number last */
   runtime->rt_magic = RUNTIME_MAGIC;

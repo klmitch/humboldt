@@ -38,6 +38,7 @@ struct _runtime_s {
   config_t	       *rt_config;	/**< Configuration */
   struct event_base    *rt_evbase;	/**< Libevent event loop */
   flexlist_t		rt_endpoints;	/**< Open endpoints */
+  struct event	       *rt_inthandle;	/**< SIGINT handler */
 };
 
 /** \brief Runtime magic number.
