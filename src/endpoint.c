@@ -379,6 +379,7 @@ _endpoint_create(runtime_t *runtime, ep_config_t *config, ep_addr_t *addr)
   /* Initialize the endpoint */
   endpoint->ep_addr = *addr;
   endpoint->ep_config = config;
+  endpoint->ep_runtime = runtime;
 
 #ifdef AF_LOCAL
   /* Make sure the local socket is unlinked */

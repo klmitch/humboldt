@@ -164,6 +164,7 @@ struct _endpoint_s {
   ep_config_t  *ep_config;	/**< Configuration associated with endpoint */
   struct evconnlistener
 	       *ep_listener;	/**< Libevent listener for endpoint */
+  runtime_t    *ep_runtime;	/**< Humboldt runtime */
 };
 
 /** \brief Endpoint magic number.
