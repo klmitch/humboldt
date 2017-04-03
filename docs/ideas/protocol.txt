@@ -1,0 +1,152 @@
+Humboldt is built on top of an underlying unicast protocol (right now,
+TCP; but in future, UDP or SCTP would be possible).  As such, the
+first level protocol, called the _carrier_ protocol, can be trivial.
+A "frame" is defined as a protocol data unit prefixed by the following
+32-bit header:
+
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |       |R|E|\ /|               |                               |
+   | Vers. |E|R| X |  Next Header  |       Total frame length      |
+   |       |P|R|/ \|               |                               |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+The first 4 bits specify the carrier protocol version.  (This version
+of the carrier protocol is version 0.)  The next four bits are flags
+used to subdivide the protocol space; the first bit is set if the
+frame is a reply, and the second bit is set in the case of an error,
+with the subsequent 2 bits reserved (meaning they MUST be set to 0).
+The next octet indicates the protocol of the next header, and the next
+two octets indicate the total frame length, including header.
+
+The "next header" value is modeled after IPv6, and may indicate
+extension headers (such as a fragmentation header) that wrap other
+headers.
+
+Design Considerations
+=====================
+
+Humboldt is designed to use underlying security mechanisms, such as
+TLS or GSSAPI (via SASL); as such, checksums should not be necessary.
+Only the carrier protocol needs to specify a full frame length, as it
+is responsible for dividing what could be an undifferentiated stream
+of data (TCP's role) into a sequence of frames.  The carrier protocol
+needs no addressing information because that is provided by the
+underlying network protocols, which are used in a unicast fashion;
+higher-level protocols may need addressing information because of the
+"overlay" nature of an overlay network.  The REP bit can allow a reply
+to be differentiated from a request, allowing the next protocol to
+offload that bit of information; similarly, the ERR bit can allow an
+error to be differentiated from normal traffic.  There is no
+requirement that a protocol must use these bits; if it doesn't, they
+should be set to 0.  Bits 6 and 7 MUST be 0, and are not available for
+use by the protocols.
+
+Protocol 0
+==========
+
+Protocol 0 is used for link status negotiation.  It must indicate the
+state of the connection, as well as wrap TLS and SASL negotiation.  It
+must also transfer the node identifiers, so both sides know who
+they're talking to.  It may also be responsible for PING/PONG, or
+those may be offloaded to a side protocol.
+
+Let's start with state transfer.  Connection state will be identified
+by a single number; right now, the states include INITIAL, AUTH,
+PRESYNC, SYNC, PENDING, PEER, CLIENT, and ERROR, which is 8 values; as
+such, 3 bits is enough to specify the states, but we should expect
+more states will be needed as the design gels.  An additional piece of
+information is whether the connection has been secured, e.g., via TLS;
+that's 1 bit of information.  We need the ID of the host, which is a
+128-bit value; and for the initial state, we should also be able to
+identify whether TLS is available and what SASL mechanisms are
+available.  We also need to know what kind of connection we are: peer
+or client; that depends on the endpoint we connected to, and is again
+a 1-bit piece of data.
+
+I think it's best to do the TLS and SASL parts in another protocol,
+and I want to reserve protocol 1 for PING/PONG exchanges, so I propose
+that protocol 0 looks like:
+
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |C|S|T|         |               |                               |
+   |L|E|L| Rsrvd.  |     State     |            Reserved           |
+   |I|C|S|         |               |                               |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |                                                               |
+   +- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -+
+   |                                                               |
+   +- - - - - - - - - - -  Node ID (128 bit)  - - - - - - - - - - -+
+   |                                                               |
+   +- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -+
+   |                                                               |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+The CLI bit indicates whether the connection is client (set) or peer
+(clear).  The SEC bit indicates whether the connection is considered
+secure by the Humboldt instance, and the TLS bit indicates whether TLS
+is available for the connection.  The two reserved fields must be set
+to all-zeros, and the state field is an 8-bit field indicating the
+connection state, with 0 indicating the initial state and 255
+indicating an error state.  Protocol 0 uses the REP bit of the carrier
+protocol: a connection may send an empty protocol 0 frame with REP
+clear to prompt the Humboldt instance to reply with the current
+connection state.  Humboldt always sets REP when sending the current
+state.  A current state message is sent any time the connection
+changes state, including at connection establishment.
+
+Protocol 1
+==========
+
+Protocol 1 is used for PING/PONG-type messages, which are used for RTT
+computation and liveness checks.  This is a simple echo-type protocol;
+any entity that receives a protocol 1 message with REP clear should
+send that exact message back to the other side with REP set.  Note
+that the message length (besides carrier protocol header) could be 0
+for client connections; clients should still set the REP bit and send
+back the message otherwise unchanged.
+
+Protocol 2
+==========
+
+Protocol 2 is used for establishing a TLS context around a
+connection.  This protocol uses the REP and ERR flags and sends no
+additional data.  The connection originator sends a protocol 2 frame
+with REP and ERR clear; the connection acceptor (Humboldt) responds
+with either an ERR bit--indicating that TLS is not available--or a REP
+bit.  Immediately after Humboldt sends REP, it initiates a TLS
+negotiation in acceptor mode on the connection; the originator, upon
+receipt of the REP frame, should immediately initiate a TLS
+negotiation in originator mode on the same connection.  Once
+negotiation is complete, Humboldt will send a connection state change
+(protocol 0) frame with the SEC bit set.
+
+Protocols 3 and 4
+=================
+
+For authentication, Humboldt uses SASL, and uses 2 different protocol
+numbers to handle different SASL interactions.  A protocol 3 frame
+requests a list of authentication mechanisms, and may be sent at any
+time, even after authentication is complete.  (This may be used to
+verify that a downgrade attack was not used.)  No data is necessary.
+Humboldt will respond with the REP bit set, and the frame data
+containing a space-separated list of SASL mechanisms supported.
+
+When a connection originator settles on an authentication mechanism to
+use, it issues a protocol 4 frame, with the REP bit clear; the payload
+should specify the name of the authentication mechanism to use.
+Humboldt will respond with REP set and mechanism-specific data in the
+payload; the connection originator should return mechanism-specific
+data, again with REP set, until both Humboldt and the originator are
+satisfied.  If an error occurs, that should be communicated to the
+other participant by sending a protocol 4 frame with ERR set.  Once
+authentication is successfully negotiated, Humboldt installs any
+mechanism-specific encoder or decoder on the connection, then sends a
+connection state change (protocol 0) frame with the state updated to
+AUTH for peer-type connections or CLIENT for client-type connections;
+and, optionally, the SEC bit will be set if the mechanism will encrypt
+the data stream.  (A guarantee of confidentiality is insufficient for
+Humboldt to consider the data stream secure.)
