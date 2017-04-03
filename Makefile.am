@@ -30,6 +30,7 @@ humboldt_SOURCES = \
 	include/db.h \
 	include/endpoint.h \
 	include/log.h \
+	include/protocol.h \
 	include/runtime.h \
 	include/yaml_util.h \
 	src/alloc.c \
@@ -38,5 +39,6 @@ humboldt_SOURCES = \
 	src/endpoint.c \
 	src/log.c \
 	src/main.c \
+	src/protocol.c \
 	src/runtime.c \
 	src/yaml_util.c

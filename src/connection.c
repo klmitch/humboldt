@@ -22,12 +22,14 @@
 #include <event2/bufferevent.h>
 #include <event2/util.h>
 #include <string.h>
+#include <uuid.h>
 
 #include "include/alloc.h"
 #include "include/common.h"
 #include "include/connection.h"
 #include "include/endpoint.h"
 #include "include/log.h"
+#include "include/protocol.h"
 
 static freelist_t connections = FREELIST_INIT(connection_t, 0);
 
@@ -127,7 +129,53 @@ connection_create(runtime_t *runtime, endpoint_t *endpoint,
   /* Add it to the list of connections */
   link_append(&runtime->rt_connections, &connection->con_link);
 
+  /* Send the connection state */
+  connection_send_state(connection);
+
   return connection;
+}
+
+int
+connection_send_state(connection_t *conn)
+{
+  protocol_buf_t pbuf = PROTOCOL_BUF_INIT(PROTOCOL_REPLY, 0);
+
+  /* Give a hint as to the packet size */
+  if (!protocol_buf_hint(&pbuf, 20)) {
+    log_emit(conn->con_runtime->rt_config, LOG_WARNING,
+	     "Out of memory initializing protocol buffer");
+    return 0;
+  }
+
+  /* Build the protocol packet */
+  if (!protocol_buf_add_uint8(&pbuf, conn->con_state.cst_flags) ||
+      !protocol_buf_add_uint8(&pbuf, conn->con_state.cst_status) ||
+      !protocol_buf_add_uint16(&pbuf, conn->con_state.cst_reserved) ||
+      !protocol_buf_append(&pbuf, conn->con_runtime->rt_config->cf_uuid,
+			   sizeof(uuid_t))) {
+    log_emit(conn->con_runtime->rt_config, LOG_WARNING,
+	     "Out of memory constructing connection state packet");
+    return 0;
+  }
+
+  /* Send it */
+  if (!protocol_buf_send(&pbuf, conn)) {
+    char address[ADDR_DESCRIPTION];
+
+    log_emit(conn->con_runtime->rt_config, LOG_INFO,
+	     "Unable to send connection state to %s: %s",
+	     ep_addr_describe(&conn->con_remote, address, sizeof(address)),
+	     strerror(errno));
+
+    connection_destroy(conn);
+
+    return 0;
+  }
+
+  /* Release the buffer memory */
+  protocol_buf_free(&pbuf);
+
+  return 1;
 }
 
 void

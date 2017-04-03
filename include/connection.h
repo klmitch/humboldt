@@ -125,6 +125,17 @@ struct _connection_s {
 connection_t *connection_create(runtime_t *runtime, endpoint_t *endpoint,
 				evutil_socket_t sock, ep_addr_t *addr);
 
+/** \brief Send connection state.
+ *
+ * Send the connection state to the connection.
+ *
+ * \param[in]		conn	The connection.
+ *
+ * \return	A true value if successful, false otherwise.  On
+ *		failure, the connection will be destroyed.
+ */
+int connection_send_state(connection_t *conn);
+
 /** \brief Destroy connection.
  *
  * This function is called to destroy a connection.  The underlying
