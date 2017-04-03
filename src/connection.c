@@ -83,6 +83,18 @@ connection_create(runtime_t *runtime, endpoint_t *endpoint,
   connection->con_type = endpoint->ep_config->epc_type;
   connection->con_runtime = runtime;
 
+  /* Initialize the connection state */
+  connection->con_state.cst_flags = 0;
+  connection->con_state.cst_status = CONN_STAT_INITIAL;
+  connection->con_state.cst_reserved = 0;
+
+  /* Set the connection flags */
+  if (connection->con_type == ENDPOINT_CLIENT)
+    connection->con_state.cst_flags |= CONN_STATE_CLI;
+  if (endpoint->ep_addr.ea_flags & EA_LOCAL)
+    /* Local connections are considered secure */
+    connection->con_state.cst_flags |= CONN_STATE_SEC;
+
   /* Create the bufferevent */
   if (!(connection->con_bev = bufferevent_socket_new(
 	  runtime->rt_evbase, sock, BEV_OPT_CLOSE_ON_FREE))) {

@@ -23,11 +23,61 @@
 #include "endpoint.h"		/* for endpoint types */
 #include "runtime.h"		/* for runtime_t */
 
+/** \brief Connection state.
+ *
+ * Represents a connection's state, including flags.  This information
+ * is grouped together as any changes to it should result in a
+ * protocol 0 message being sent.
+ */
+typedef struct _conn_state_s conn_state_t;
+
 /** \brief Connection.
  *
  * Represents a connection to a client or to another peer.
  */
 typedef struct _connection_s connection_t;
+
+/** \brief Connection status.
+ *
+ * The status of the connection.
+ */
+typedef enum _conn_status_e {
+  CONN_STAT_INITIAL = 0,	/**< Connection is in INITIAL status */
+  CONN_STAT_ERROR = 255		/**< Connection is in ERROR status */
+} conn_status_t;
+
+/** \brief Connection state structure.
+ *
+ * This structure contains the connection state.
+ */
+struct _conn_state_s {
+  uint8_t	cst_flags;	/**< Connection flags */
+  conn_status_t	cst_status:8;	/**< Connection status (8 bits) */
+  uint16_t	cst_reserved;	/**< Reserved; should be set to 0 */
+};
+
+/** \brief Client connection flag.
+ *
+ * This state flag is set if the connection is a client-type
+ * connection.
+ */
+#define CONN_STATE_CLI		0x80
+
+/** \brief Secure flag.
+ *
+ * This state flag is set if the connection is secure.  Note that this
+ * implies confidentiality protection, e.g., encryption; simple
+ * integrity protection does not constitute "secure".
+ */
+#define CONN_STATE_SEC		0x40
+
+/** \brief TLS availability flag.
+ *
+ * This state flag is set if TLS protection is available for the
+ * connection.  The presence of this flag in the protocol indicates
+ * that a STARTTLS protocol frame may succeed.
+ */
+#define CONN_STATE_TLS		0x20
 
 /** \brief Connection structure.
  *
@@ -39,6 +89,7 @@ struct _connection_s {
   ep_addr_t	con_remote;	/**< Remote address */
   endpoint_t   *con_endpoint;	/**< Endpoint connection came in on */
   ep_type_t	con_type;	/**< Type of connection: peer or client? */
+  conn_state_t	con_state;	/**< Connection state */
   struct bufferevent
 	       *con_bev;	/**< Libevent eventbuffer for connection */
   runtime_t    *con_runtime;	/**< Humboldt runtime */
