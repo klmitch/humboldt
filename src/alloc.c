@@ -14,6 +14,8 @@
 ** permissions and limitations under the License.
 */
 
+#include <config.h>
+
 #include <stdlib.h>
 
 #include "include/alloc.h"
