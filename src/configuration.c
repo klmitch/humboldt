@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <syslog.h>
+#include <uuid.h>
 #include <yaml.h>
 
 #include "include/common.h"
@@ -655,12 +656,35 @@ proc_statedir(const char *key, config_t *conf, yaml_ctx_t *ctx,
   conf->cf_flags |= CONFIG_STATEDIR_ALLOCATED;
 }
 
+static void
+proc_uuid(const char *key, config_t *conf, yaml_ctx_t *ctx, yaml_node_t *value)
+{
+  const char *uuid_text;
+
+  common_verify(conf, CONFIG_MAGIC);
+
+  /* Convert the value as a string */
+  if (!yaml_get_str(ctx, value, &uuid_text, 0, 0))
+    return;
+
+  /* Parse the UUID */
+  if (uuid_parse(uuid_text, conf->cf_uuid)) {
+    yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
+		    "Unable to parse UUID \"%s\"", uuid_text);
+    return;
+  }
+
+  /* UUID is set */
+  conf->cf_flags |= CONFIG_UUID_SET;
+}
+
 static mapkeys_t top_level[] = {
   MAPKEY("debug", proc_debug),
   MAPKEY("endpoints", proc_endpoints),
   MAPKEY("facility", proc_facility),
   MAPKEY("networks", proc_networks),
-  MAPKEY("statedir", proc_statedir)
+  MAPKEY("statedir", proc_statedir),
+  MAPKEY("uuid", proc_uuid)
 };
 
 int
@@ -798,6 +822,7 @@ void
 initialize_config(config_t *conf, int argc, char **argv)
 {
   const char *tmp;
+  char uuid_buf[37];
 
   common_verify(conf, CONFIG_MAGIC);
 
@@ -814,5 +839,14 @@ initialize_config(config_t *conf, int argc, char **argv)
   if (!config_read(conf)) {
     log_emit(conf, LOG_ERR, "Unable to read configuration, exiting...");
     exit(EXIT_FAILURE);
+  }
+
+  /* Make sure we have a UUID */
+  if (!(conf->cf_flags & CONFIG_UUID_SET)) {
+    uuid_generate(conf->cf_uuid);
+    conf->cf_flags |= CONFIG_UUID_SET;
+    uuid_unparse(conf->cf_uuid, uuid_buf);
+    log_emit(conf, LOG_NOTICE, "UUID not set by configuration; using %s",
+	     uuid_buf);
   }
 }

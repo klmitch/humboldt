@@ -21,6 +21,7 @@
 #include <event2/util.h>
 #include <signal.h>
 #include <string.h>
+#include <uuid.h>
 
 #include "include/alloc.h"
 #include "include/endpoint.h"
@@ -91,5 +92,11 @@ initialize_runtime(runtime_t *runtime, config_t *conf)
 int
 run(runtime_t *runtime)
 {
+  char uuid_buf[37];
+
+  uuid_unparse(runtime->rt_config->cf_uuid, uuid_buf);
+  log_emit(runtime->rt_config, LOG_NOTICE,
+	   "Starting humboldt with UUID %s", uuid_buf);
+
   return event_base_loop(runtime->rt_evbase, 0);
 }

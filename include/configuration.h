@@ -19,6 +19,7 @@
 
 #include <stdint.h>	/* for uint32_t */
 #include <syslog.h>	/* for LOG_DAEMON */
+#include <uuid.h>	/* for uuid_t */
 
 #include "alloc.h"	/* for flexlist_t */
 #include "common.h"	/* for magic_t */
@@ -43,6 +44,7 @@ struct _config_s {
   const char   *cf_config;	/**< Name of the configuration file */
   const char   *cf_statedir;	/**< Name of the state directory */
   const char   *cf_prog;	/**< The program name */
+  uuid_t	cf_uuid;	/**< UUID of Humboldt */
   int		cf_facility;	/**< Syslog facility to log to */
   flexlist_t	cf_endpoints;	/**< Configured endpoints */
   flexlist_t	cf_networks;	/**< Configured origination networks */
@@ -84,7 +86,7 @@ struct _config_s {
  */
 #define CONFIG_INIT()							\
   {CONFIG_MAGIC, CONFIG_FILE_DEFAULT, DEFAULT_CONFIG, DEFAULT_STATEDIR, \
-      0, LOG_DAEMON, FLEXLIST_INIT(ep_config_t),			\
+      0, {}, LOG_DAEMON, FLEXLIST_INIT(ep_config_t),			\
       FLEXLIST_INIT(ep_network_t)}
 
 /** \brief Debugging enabled.
@@ -142,6 +144,13 @@ struct _config_s {
  * file.
  */
 #define CONFIG_STATEDIR_FIXED		0x02000000
+
+/** \brief UUID set.
+ *
+ * A configuration flag indicating that the UUID has been obtained
+ * from the configuration file.
+ */
+#define CONFIG_UUID_SET			0x01000000
 
 /** \brief Initialize configuration.
  *
