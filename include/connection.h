@@ -37,6 +37,8 @@ typedef struct _conn_state_s conn_state_t;
  */
 typedef struct _connection_s connection_t;
 
+#include "protocol.h"	/* for protocol_buf_t; depends on connection_t */
+
 /** \brief Connection status.
  *
  * The status of the connection.
@@ -45,6 +47,16 @@ typedef enum _conn_status_e {
   CONN_STAT_INITIAL = 0,	/**< Connection is in INITIAL status */
   CONN_STAT_ERROR = 255		/**< Connection is in ERROR status */
 } conn_status_t;
+
+/** \brief Connection errors.
+ *
+ * The possible error codes for connection errors.  These are used for
+ * such tasks as reporting an unknown protocol.
+ */
+typedef enum _conn_error_e {
+  CONN_ERR_NO_ERROR,		/**< No error has occurred */
+  CONN_ERR_UNKNOWN_PROTOCOL	/**< Protocol is unknown */
+} conn_error_t;
 
 /** \brief Connection state structure.
  *
@@ -135,6 +147,48 @@ connection_t *connection_create(runtime_t *runtime, endpoint_t *endpoint,
  *		failure, the connection will be destroyed.
  */
 int connection_send_state(connection_t *conn);
+
+/** \brief Send an error report.
+ *
+ * If an error occurs, this function is responsible for reporting the
+ * error to the remote side.  This function may take a third argument,
+ * depending on the value of \p error.
+ *
+ * <TABLE>
+ *   <TR>
+ *     <TH>Error</TH>
+ *     <TH>Arguments</TH>
+ *   </TR>
+ *   <TR>
+ *     <TD>CONN_ERR_NO_ERROR</TD>
+ *     <TD>No additional argument required.</TD>
+ *   </TR>
+ *   <TR>
+ *     <TD>CONN_ERR_UNKNOWN_PROTOCOL</TD>
+ *     <TD>Protocol number (uint8_t).</TD>
+ *   </TR>
+ * </TABLE>
+ *
+ * \param[in,out]	conn	The connection.  After making this
+ *				call, the connection is destroyed; no
+ *				further references to the connection
+ *				should be made.
+ * \param[in]		error	The error that occurred.
+ */
+void connection_report_error(connection_t *conn, conn_error_t error, ...);
+
+/** \brief Process received connection state message.
+ *
+ * This is a protocol dispatch routine which is used to process
+ * received connection state messages.
+ *
+ * \param[in]		msg	The received message to process.
+ * \param[in,out]	conn	The connection the message came in
+ *				on.
+ *
+ * \return	One of the #pbuf_result_t values.
+ */
+pbuf_result_t connection_process(protocol_buf_t *msg, connection_t *conn);
 
 /** \brief Destroy connection.
  *

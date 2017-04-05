@@ -21,6 +21,7 @@
 #include <event2/buffer.h>
 #include <event2/bufferevent.h>
 #include <event2/util.h>
+#include <stdarg.h>
 #include <string.h>
 #include <uuid.h>
 
@@ -36,10 +37,38 @@ static freelist_t connections = FREELIST_INIT(connection_t, 0);
 static void
 _connection_read(struct bufferevent *bev, connection_t *conn)
 {
-  /* For now, just act like an echo server */
+  protocol_buf_t *msg;
   struct evbuffer *in = bufferevent_get_input(bev);
-  struct evbuffer *out = bufferevent_get_output(bev);
-  evbuffer_add_buffer(out, in);
+  char address[ADDR_DESCRIPTION];
+
+  while (1) {
+    /* Grab off a message */
+    if (!protocol_buf_recv(in, &msg)) {
+      log_emit(conn->con_runtime->rt_config, LOG_NOTICE,
+	       "Error receiving message from %s: %s",
+	       ep_addr_describe(&conn->con_remote, address, sizeof(address)),
+	       strerror(errno));
+      connection_destroy(conn);
+      return;
+    }
+
+    /* Was there a message? */
+    if (!msg)
+      return;
+
+    log_emit(conn->con_runtime->rt_config, LOG_DEBUG,
+	     "Protocol %u message received from %s", msg->pb_protocol,
+	     ep_addr_describe(&conn->con_remote, address, sizeof(address)));
+
+    /* Process the message */
+    if (protocol_buf_dispatch(msg, conn) == PBR_CONNECTION_CLOSE) {
+      log_emit(conn->con_runtime->rt_config, LOG_INFO,
+	       "Closing connection %s",
+	       ep_addr_describe(&conn->con_remote, address, sizeof(address)));
+      connection_destroy(conn);
+      return;
+    }
+  }
 }
 
 static void
@@ -130,7 +159,10 @@ connection_create(runtime_t *runtime, endpoint_t *endpoint,
   link_append(&runtime->rt_connections, &connection->con_link);
 
   /* Send the connection state */
-  connection_send_state(connection);
+  if (!connection_send_state(connection)) {
+    connection_destroy(connection);
+    return 0;
+  }
 
   return connection;
 }
@@ -167,8 +199,6 @@ connection_send_state(connection_t *conn)
 	     ep_addr_describe(&conn->con_remote, address, sizeof(address)),
 	     strerror(errno));
 
-    connection_destroy(conn);
-
     return 0;
   }
 
@@ -176,6 +206,70 @@ connection_send_state(connection_t *conn)
   protocol_buf_free(&pbuf);
 
   return 1;
+}
+
+void
+connection_report_error(connection_t *conn, conn_error_t error, ...)
+{
+  char address[ADDR_DESCRIPTION], errmsg[1024] = "";
+  protocol_buf_t pbuf = PROTOCOL_BUF_INIT(PROTOCOL_ERROR, 0);
+  va_list ap;
+
+  common_verify(conn, CONNECTION_MAGIC);
+
+  /* Set the error code on the error packet */
+  protocol_buf_add_uint8(&pbuf, error);
+
+  /* Process any additional arguments */
+  va_start(ap, error);
+  switch (error) {
+  case CONN_ERR_NO_ERROR:
+    /* No additional arguments */
+    snprintf(errmsg, sizeof(errmsg), "No error");
+    break;
+
+  case CONN_ERR_UNKNOWN_PROTOCOL:
+    {
+      /* Add the protocol to the error packet */
+      unsigned int proto = va_arg(ap, unsigned int);
+      protocol_buf_add_uint8(&pbuf, proto);
+
+      snprintf(errmsg, sizeof(errmsg), "Unrecognized protocol %d", proto);
+    }
+    break;
+  }
+
+  /* Make a best effort to send the message */
+  protocol_buf_send(&pbuf, conn);
+
+  /* Free the error message */
+  protocol_buf_free(&pbuf);
+
+  /* Log the error */
+  log_emit(conn->con_runtime->rt_config, LOG_NOTICE,
+	   "Error from %s: %s",
+	   ep_addr_describe(&conn->con_remote, address, sizeof(address)),
+	   errmsg);
+}
+
+pbuf_result_t
+connection_process(protocol_buf_t *msg, connection_t *conn)
+{
+  common_verify(msg, PROTOCOL_BUF_MAGIC);
+  common_verify(conn, CONNECTION_MAGIC);
+
+  /* Handle the message bits */
+  if (msg->pb_flags & PROTOCOL_ERROR) {
+    /* Other side will be closing the connection */
+    /* XXX We should log the error information */
+    return PBR_CONNECTION_CLOSE;
+  } else if (msg->pb_flags & PROTOCOL_REPLY)
+    /* Should maintain state of the other end */
+    return PBR_MSG_PROCESSED;
+
+  /* For a request packet, just send the state */
+  return connection_send_state(conn) ? PBR_MSG_PROCESSED :
+    PBR_CONNECTION_CLOSE;
 }
 
 void
