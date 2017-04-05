@@ -55,7 +55,7 @@ struct _protocol_buf_s {
  *
  * Initialize a protocol buffer.  This is a static initializer that
  * ensures that the protocol buffer is properly initialized.
-are freed after this call and  *
+ *
  * \param[in]		flags	The flags to set on the protocol
  *				message.
  * \param[in]		proto	The protocol number to specify.
