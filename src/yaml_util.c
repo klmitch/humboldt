@@ -267,7 +267,6 @@ static struct node_tags tag_list[] = {
   {YAML_TIMESTAMP_TAG, NODE_TIMESTAMP_TAG, possible(NODE_TIMESTAMP_TAG),
    implicit_proc}
 };
-#define TAG_COUNT	(sizeof(tag_list) / sizeof(struct node_tags))
 
 static int
 tag_compare(const char *tag, const struct node_tags *member)
@@ -303,7 +302,7 @@ yaml_get_scalar(yaml_ctx_t *ctx, yaml_node_t *scalar, node_info_t *info)
   /* Look up the tag in the array */
   if ((result = (struct node_tags *)bsearch((const void *)scalar->tag,
 					    (const void *)tag_list,
-					    TAG_COUNT,
+					    list_count(tag_list),
 					    sizeof(struct node_tags),
 					    (compare_t)tag_compare)))
     return result->proc(ctx, scalar, result->type, result->possible_types,

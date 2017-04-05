@@ -19,6 +19,17 @@
 
 #include <stdint.h>
 
+/** \brief Count the items in a list.
+ *
+ * This macro dereferences a list to determine the number of items in
+ * that list.
+ *
+ * \param[in]		list	The list (of any type) to count.
+ *
+ * \return	The number of items in the list.
+ */
+#define list_count(list)	(sizeof(list) / sizeof(list[0]))
+
 /** \brief Default port number.
  *
  * This macro contains the default port number for Humboldt.  It can

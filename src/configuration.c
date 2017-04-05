@@ -291,7 +291,7 @@ proc_endpoint_ad(int idx, ep_config_t *endpoint, yaml_ctx_t *ctx,
 
   /* Process the configuration */
   if (value->type == YAML_MAPPING_NODE)
-    yaml_proc_mapping(ctx, value, ad_config, MAPKEYS_COUNT(ad_config),
+    yaml_proc_mapping(ctx, value, ad_config, list_count(ad_config),
 		      (void *)ad);
   else if (yaml_get_str(ctx, value, &network, 0, ALLOW_NULL)) {
     if (network) {
@@ -427,7 +427,7 @@ proc_endpoint(int idx, config_t *conf, yaml_ctx_t *ctx, yaml_node_t *value)
 
   /* Process the configuration */
   yaml_proc_mapping(ctx, value,
-		    endpoint_config, MAPKEYS_COUNT(endpoint_config),
+		    endpoint_config, list_count(endpoint_config),
 		    (void *)endpoint);
 
   /* Set the default port as needed */
@@ -578,7 +578,7 @@ proc_network(int idx, config_t *conf, yaml_ctx_t *ctx, yaml_node_t *value)
   /* Process the configuration */
   if (value->type == YAML_MAPPING_NODE)
     yaml_proc_mapping(ctx, value, network_config,
-		      MAPKEYS_COUNT(network_config), (void *)network);
+		      list_count(network_config), (void *)network);
   else if (yaml_get_str(ctx, value, &name, 0, ALLOW_NULL)) {
     if (name) {
       if (strlen(name) > NETWORK_LEN) {
@@ -706,7 +706,7 @@ config_read(config_t *conf)
     }
   } else {
     valid = yaml_file_mapping(conf, conf->cf_config, stream, top_level,
-			      MAPKEYS_COUNT(top_level), (void *)conf, 0, 0);
+			      list_count(top_level), (void *)conf, 0, 0);
     fclose(stream);
 
     if (!valid)

@@ -32,7 +32,6 @@ struct facility_s {
   const char *f_name;
   int f_val;
 };
-#define CODE_SIZE(list)		(sizeof((list)) / sizeof(struct facility_s))
 
 /* Note: this list must be in the same collation as used by strcmp(),
  * as it will be searched using a binary search.
@@ -113,7 +112,7 @@ log_facility(const char *name)
 
   if (!(result = (struct facility_s *)bsearch((const void *)name,
 					      (const void *)facilities,
-					      CODE_SIZE(facilities),
+					      list_count(facilities),
 					      sizeof(struct facility_s),
 					      (compare_t)facility_compare)))
     return -1;

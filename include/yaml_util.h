@@ -155,12 +155,6 @@ struct _mapkeys_s {
  */
 #define MAPKEY(key, proc)	{(key), (mapproc_t)(proc)}
 
-/** \brief Count entries in a #mapkeys_t list.
- *
- * This macro counts the number of entries in a #mapkeys_t list.
- */
-#define MAPKEYS_COUNT(list)	(sizeof((list)) / sizeof(mapkeys_t))
-
 /** \brief YAML scalar node information structure.
  *
  * This structure describes the information known about a YAML scalar
