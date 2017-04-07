@@ -33,6 +33,7 @@
 typedef struct _config_s config_t;
 
 #include "endpoint.h"	/* for endpoint types; depends on config_t */
+#include "ssl.h"	/* for ssl_conf_t; depends on config_t */
 
 /** \brief Configuration structure.
  *
@@ -48,6 +49,7 @@ struct _config_s {
   int		cf_facility;	/**< Syslog facility to log to */
   flexlist_t	cf_endpoints;	/**< Configured endpoints */
   flexlist_t	cf_networks;	/**< Configured origination networks */
+  ssl_conf_t   *cf_ssl;		/**< SSL configuration */
 };
 
 /** \brief Configuration magic number.
@@ -87,7 +89,7 @@ struct _config_s {
 #define CONFIG_INIT()							\
   {CONFIG_MAGIC, CONFIG_FILE_DEFAULT, DEFAULT_CONFIG, DEFAULT_STATEDIR, \
       0, {}, LOG_DAEMON, FLEXLIST_INIT(ep_config_t),			\
-      FLEXLIST_INIT(ep_network_t)}
+      FLEXLIST_INIT(ep_network_t), 0}
 
 /** \brief Debugging enabled.
  *

@@ -36,6 +36,13 @@ AC_CONFIG_MACRO_DIRS([m4])
 AC_CONFIG_LIBOBJ_DIR([lib])
 AM_INIT_AUTOMAKE
 
+dnl Process command line arguments
+AC_ARG_WITH([openssl],
+  [AS_HELP_STRING([--with-openssl],
+    [support SSL-secured connections @<:@default=check@:>@])],
+  [],
+  [with_openssl=check])
+
 dnl Checks for programs
 AC_PROG_CC_C99
 PKG_PROG_PKG_CONFIG
@@ -45,6 +52,17 @@ AX_LIB_SOCKET_NSL
 HUMBOLDT_PC_LIBRARY([YAML], [yaml-0.1])
 HUMBOLDT_PC_LIBRARY([UUID], [uuid])
 HUMBOLDT_PC_LIBRARY([LIBEVENT], [libevent])
+
+dnl Conditional libraries
+OPENSSL_CFLAGS=
+OPENSSL_LIBS=
+LIBEVENT_OPENSSL_CFLAGS=
+LIBEVENT_OPENSSL_LIBS=
+AS_IF([test "x$with_openssl" != xno],
+  [HUMBOLDT_PC_LIBRARY([OPENSSL], [openssl])
+   HUMBOLDT_PC_LIBRARY([LIBEVENT_OPENSSL], [libevent_openssl])
+   AC_DEFINE([HAVE_OPENSSL], [1], [Define if you have and are using OpenSSL])
+  ])
 
 dnl Checks for header files
 

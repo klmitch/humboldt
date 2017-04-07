@@ -96,6 +96,22 @@ main(int argc, char **argv)
 	     network->epn_name ? network->epn_name : "<Public>");
   }
 
+  /* Report the SSL configuration */
+  if (!conf.cf_ssl)
+    log_emit(&conf, LOG_DEBUG, "SSL not configured");
+  else {
+    log_emit(&conf, LOG_DEBUG, "SSL configured:");
+    if (conf.cf_ssl->sc_cert_chain)
+      log_emit(&conf, LOG_DEBUG, "  Certificate chain file: %s",
+	       conf.cf_ssl->sc_cert_chain);
+    if (conf.cf_ssl->sc_ciphers)
+      log_emit(&conf, LOG_DEBUG, "  Configured SSL ciphers: %s",
+	       conf.cf_ssl->sc_ciphers);
+    if (conf.cf_ssl->sc_private_key)
+      log_emit(&conf, LOG_DEBUG, "  Private key file: %s",
+	       conf.cf_ssl->sc_private_key);
+  }
+
   /* Initialize the runtime */
   if (!initialize_runtime(&runtime, &conf)) {
     log_emit(&conf, LOG_ERR, "Failed to initialize runtime, exiting...");

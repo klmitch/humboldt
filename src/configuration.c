@@ -28,6 +28,7 @@
 #include "include/common.h"
 #include "include/configuration.h"
 #include "include/log.h"
+#include "include/ssl.h"
 #include "include/yaml_util.h"
 
 /* Recognized short options */
@@ -683,6 +684,7 @@ static mapkeys_t top_level[] = {
   MAPKEY("endpoints", proc_endpoints),
   MAPKEY("facility", proc_facility),
   MAPKEY("networks", proc_networks),
+  MAPKEY("ssl", ssl_conf_processor),
   MAPKEY("statedir", proc_statedir),
   MAPKEY("uuid", proc_uuid)
 };
