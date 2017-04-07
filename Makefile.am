@@ -14,7 +14,7 @@
 
 AUTOMAKE_OPTIONS = subdir-objects foreign
 
-EXTRA_DIST = autogen.sh docs lib LICENSE
+EXTRA_DIST = autogen.sh docs lib LICENSE tools
 
 AM_CPPFLAGS = \
 	-DLOCALSTATEDIR='"$(localstatedir)"' \
