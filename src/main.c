@@ -29,6 +29,7 @@ int
 main(int argc, char **argv)
 {
   char addr_desc[ADDR_DESCRIPTION];
+  char uuid_buf[37];
   config_t conf = CONFIG_INIT();
   runtime_t runtime;
 
@@ -45,6 +46,8 @@ main(int argc, char **argv)
 	   (conf.cf_flags & CONFIG_DEBUG_FIXED) ? " (no override)" : "");
   log_emit(&conf, LOG_DEBUG, "Log facility %d%s", conf.cf_facility >> 3,
 	   (conf.cf_flags & CONFIG_FACILITY_FIXED) ? " (no override)" : "");
+  uuid_unparse(conf.cf_uuid, uuid_buf);
+  log_emit(&conf, LOG_DEBUG, "Humboldt node UUID: %s", uuid_buf);
 
   /* How many endpoints have been defined? */
   log_emit(&conf, LOG_DEBUG, "Endpoints (%d):",
