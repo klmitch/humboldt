@@ -15,6 +15,16 @@
 AUTOMAKE_OPTIONS = subdir-objects foreign
 
 EXTRA_DIST = autogen.sh docs lib LICENSE README.rst tools
+dist-hook:
+	rm -rf `find $(distdir)/tools -name build -print -prune`
+	rm -rf `find $(distdir)/tools -name .cache -print -prune`
+	rm -rf `find $(distdir)/tools -name .coverage -print`
+	rm -rf `find $(distdir)/tools -name cov_html -print -prune`
+	rm -rf `find $(distdir)/tools -name dist -print -prune`
+	rm -rf `find $(distdir)/tools -name .tox -print -prune`
+	rm -rf `find $(distdir)/tools -name __pycache__ -print -prune`
+	rm -rf `find $(distdir)/tools -name \*.egg-info -print -prune`
+	rm -rf `find $(distdir)/tools -name \*.pyc -print`
 
 AM_CPPFLAGS = \
 	-DLOCALSTATEDIR='"$(localstatedir)"' \
