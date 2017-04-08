@@ -176,6 +176,7 @@ class TestInvalidatingAttrMeta(object):
             'attr3': attrs.InvalidatingAttr(),
             'attr4': attrs.InvalidatingAttr(),
         }
+
         result = attrs.InvalidatingAttrMeta('name', (object,), namespace)
 
         assert result.attr1 == 'some value'
