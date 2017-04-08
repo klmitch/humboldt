@@ -282,12 +282,51 @@ class TestMessage(object):
         )
         assert not mock_init.called
 
+    def test_recv_header_only_closed(self, mocker):
+        mocker.patch.dict(message.Message._decoders, clear=True)
+        mock_recvall = mocker.patch.object(
+            message, '_recvall', return_value=None
+        )
+        mock_init = mocker.patch.object(
+            message.Message, '__init__', return_value=None
+        )
+
+        result = message.Message.recv('sock')
+
+        assert result is None
+        mock_recvall.assert_called_once_with(
+            'sock', message.Message._carrier.size
+        )
+        assert not mock_init.called
+
     def test_recv_with_payload_short(self, mocker):
         mocker.patch.dict(message.Message._decoders, clear=True)
         mock_recvall = mocker.patch.object(
             message, '_recvall', side_effect=[
                 b'\0\0\0\22',
                 b'this is a t',
+            ],
+        )
+        mock_init = mocker.patch.object(
+            message.Message, '__init__', return_value=None
+        )
+
+        result = message.Message.recv('sock')
+
+        assert result is None
+        mock_recvall.assert_has_calls([
+            mocker.call('sock', message.Message._carrier.size),
+            mocker.call('sock', 14),
+        ])
+        assert mock_recvall.call_count == 2
+        assert not mock_init.called
+
+    def test_recv_with_payload_closed(self, mocker):
+        mocker.patch.dict(message.Message._decoders, clear=True)
+        mock_recvall = mocker.patch.object(
+            message, '_recvall', side_effect=[
+                b'\0\0\0\22',
+                None,
             ],
         )
         mock_init = mocker.patch.object(
@@ -377,7 +416,7 @@ class TestMessage(object):
             message.Message, 'resolve', return_value=type_
         )
 
-        result = message.Message.interpret('msg test a=1 c=3')
+        result = message.Message.interpret(['msg', 'test', 'a=1', 'c=3'])
 
         assert result == type_.return_value
         mock_resolve.assert_called_once_with('msgtest')
@@ -406,7 +445,7 @@ class TestMessage(object):
             message.Message, 'resolve', return_value=type_
         )
 
-        result = message.Message.interpret('msg test')
+        result = message.Message.interpret(['msg', 'test'])
 
         assert result == type_.return_value
         mock_resolve.assert_called_once_with('msgtest')
@@ -422,7 +461,7 @@ class TestMessage(object):
         )
 
         with pytest.raises(message.CommandError):
-            message.Message.interpret('msg test')
+            message.Message.interpret(['msg', 'test'])
         mock_resolve.assert_called_once_with('msgtest')
 
     def test_interpret_missing_parameter_value(self, mocker):
@@ -442,7 +481,7 @@ class TestMessage(object):
         )
 
         with pytest.raises(message.CommandError):
-            message.Message.interpret('msg test a=1 b c=3')
+            message.Message.interpret(['msg', 'test', 'a=1', 'b', 'c=3'])
         mock_resolve.assert_called_once_with('msgtest')
         type_._carrier_attrs['a'].assert_called_once_with('1')
         assert not type_._carrier_attrs['b'].called
@@ -467,7 +506,7 @@ class TestMessage(object):
         )
 
         with pytest.raises(message.CommandError):
-            message.Message.interpret('msg test a=1 e=5')
+            message.Message.interpret(['msg', 'test', 'a=1', 'e=5'])
         mock_resolve.assert_called_once_with('msgtest')
         type_._carrier_attrs['a'].assert_called_once_with('1')
         assert not type_._carrier_attrs['b'].called
@@ -492,7 +531,7 @@ class TestMessage(object):
         )
 
         with pytest.raises(message.CommandError):
-            message.Message.interpret('msg test a=1 c=3')
+            message.Message.interpret(['msg', 'test', 'a=1', 'c=3'])
         mock_resolve.assert_called_once_with('msgtest')
         type_._carrier_attrs['a'].assert_called_once_with('1')
         assert not type_._carrier_attrs['b'].called
@@ -518,7 +557,7 @@ class TestMessage(object):
         )
 
         with pytest.raises(message.CommandError):
-            message.Message.interpret('msg test a=1 c=3')
+            message.Message.interpret(['msg', 'test', 'a=1', 'c=3'])
         mock_resolve.assert_called_once_with('msgtest')
         type_._carrier_attrs['a'].assert_called_once_with('1')
         assert not type_._carrier_attrs['b'].called

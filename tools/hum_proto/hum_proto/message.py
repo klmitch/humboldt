@@ -14,7 +14,6 @@
 
 import collections
 import itertools
-import shlex
 import struct
 import uuid
 
@@ -306,7 +305,7 @@ class Message(object):
 
         # First, get the carrier protocol header
         hdr = _recvall(sock, cls._carrier.size)
-        if len(hdr) < cls._carrier.size:
+        if not hdr or len(hdr) < cls._carrier.size:
             # No more data to read
             return None
         vers_flags, protocol, size = cls._carrier.unpack(hdr)
@@ -317,7 +316,7 @@ class Message(object):
         if size > cls._carrier.size:
             payload = _recvall(sock, size - cls._carrier.size)
 
-            if len(payload) < size - cls._carrier.size:
+            if not payload or len(payload) < size - cls._carrier.size:
                 # Connection closed with incomplete frame
                 return None
         else:
@@ -341,32 +340,28 @@ class Message(object):
     @classmethod
     def interpret(cls, command):
         """
-        Interpret a command.  The command string is split using ``shlex``.
-        The first tokens are taken to name the message type, which
-        should be followed by tokens of the form "param=value".  The
-        "param" should be the name of a recognized message parameter,
-        and the "value" should be an appropriate value for that
-        parameter.
+        Interpret a list of command tokens.  The first tokens are taken to
+        name the message type, which should be followed by tokens of
+        the form "param=value".  The "param" should be the name of a
+        recognized message parameter, and the "value" should be an
+        appropriate value for that parameter.
 
-        :param str command: The command to interpret.
+        :param list command: The list of command tokens to interpret.
 
         :returns: An instance of an appropriate ``Message`` subclass
                   representing the desired value.
         :rtype: ``Message``
         """
 
-        # Begin by using shlex to tokenize command
-        tokens = shlex.split(command)
-
         # Figure out which tokens compose the message type
-        for i in range(len(tokens)):
-            if '=' in tokens[i]:
-                type_name = ''.join(tokens[:i])
-                tokens = tokens[i:]
+        for i in range(len(command)):
+            if '=' in command[i]:
+                type_name = ''.join(command[:i])
+                command = command[i:]
                 break
         else:
-            type_name = ''.join(tokens)
-            tokens = []
+            type_name = ''.join(command)
+            command = []
 
         # Look up the message type
         type_ = cls.resolve(type_name)
@@ -375,7 +370,7 @@ class Message(object):
 
         # Now interpret the tokens
         params = {}
-        for tok in tokens:
+        for tok in command:
             key, sep, value = tok.partition('=')
             if not sep:
                 raise CommandError(
