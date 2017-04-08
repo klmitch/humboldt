@@ -12,6 +12,7 @@
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
 
+import collections
 import struct
 import uuid
 
@@ -56,7 +57,7 @@ class Message(object):
     """
 
     # Registered and recognized protocols
-    _protocols = {}
+    _decoders = {}
 
     # Information related to the carrier protocol
     _carrier_default_version = 0
@@ -75,38 +76,33 @@ class Message(object):
     @classmethod
     def register(cls, proto):
         """
-        A class decorator used to register a class to be used to decode a
-        given protocol.  Such classes should inherit from ``Message``
-        and must implement a ``_decode()`` class method that will be
-        called to decode a raw protocol message.  The ``_decode()``
-        class method must take a carrier protocol version
-        (``carrier_version``), carrier protocol flags
+        A decorator used to register a function to be used to decode a
+        given protocol.  The function must take a carrier protocol
+        version (``carrier_version``), carrier protocol flags
         (``carrier_flags``), the protocol number (``protocol``), the
         payload (``payload``), and the message bytes (``_bytes``) as
         keyword arguments, and must return an instance of a subclass
         of ``Message``.  (The recommended way of handling this is take
         arbitrary keyword arguments and pass them on to the
-        constructor.)  The class must additionally override the
-        ``_encode()`` method to assemble the binary payload.
+        ``Message`` constructor.)
 
         :param int proto: The protocol implemented by the class.
 
-        :returns: A class decorator that will register the class.
+        :returns: A decorator that will register the decoder function.
 
         :raises TypeError:
             The protocol specified is invalid or already registered.
         """
 
         # Make sure protocol number makes sense
-        if proto < 0 or proto > 255 or proto in cls._protocols:
+        if proto < 0 or proto > 255 or proto in cls._decoders:
             raise TypeError('Bad or duplicate protocol %d' % proto)
 
         # Decorator to actually register the class
-        def decorator(proto_cls):
-            cls._protocols[proto] = proto_cls
-            proto_cls.PROTOCOL = proto
+        def decorator(decoder):
+            cls._decoders[proto] = decoder
 
-            return proto_cls
+            return decoder
 
         return decorator
 
@@ -150,8 +146,8 @@ class Message(object):
         }
 
         # Make the message object
-        obj = (cls._protocols[protocol]._decode
-               if protocol in cls._protocols else cls)(**params)
+        obj = (cls._decoders[protocol]
+               if protocol in cls._decoders else cls)(**params)
 
         return obj
 
@@ -302,7 +298,6 @@ class Message(object):
         return self._bytes
 
 
-@Message.register(0)
 class ConnectionState(Message):
     """
     Represent a connection state message.
@@ -334,8 +329,6 @@ class ConnectionState(Message):
         """
         Decode a connection state message.
 
-        :param carrier_flags: The carrier protocol flags.
-        :type carrier_flags: ``FlagSet``
         :param bytes payload: The connection state message.
         :param **kwargs: Other keyword arguments to pass to the
                          constructor.
@@ -345,18 +338,14 @@ class ConnectionState(Message):
         :rtype: ``ConnectionState``
         """
 
-        if 'reply' in kwargs['carrier_flags']:
-            # Extract data from the payload
-            flags, status, node_id = cls._message.unpack(kwargs['payload'])
+        # Extract data from the payload
+        flags, status, node_id = cls._message.unpack(kwargs['payload'])
 
-            # Transform the flags and UUID as appropriate
-            flags = cls.flags.eset.flagset(flags)
-            node_id = uuid.UUID(bytes=node_id)
+        # Transform the flags and UUID as appropriate
+        flags = cls.flags.eset.flagset(flags)
+        node_id = uuid.UUID(bytes=node_id)
 
-            return cls(flags, status, node_id, **kwargs)
-
-        # Nothing to disassemble
-        return cls(**kwargs)
+        return cls(flags, status, node_id, **kwargs)
 
     def __init__(self, flags=None, status=0, node_id=None, **kwargs):
         """
@@ -386,12 +375,9 @@ class ConnectionState(Message):
         :rtype: ``bytes``
         """
 
-        if 'reply' in self.carrier_flags:
-            return self._message.pack(
-                int(self.flags), int(self.status), self.node_id.bytes
-            )
-
-        return b''
+        return self._message.pack(
+            int(self.flags), int(self.status), self.node_id.bytes
+        )
 
     @attrs.FilterAttr
     def node_id(self, node_id):
@@ -406,3 +392,150 @@ class ConnectionState(Message):
             node_id = uuid.UUID(node_id)
 
         return node_id
+
+
+class RequestConnectionState(Message):
+    """
+    Represent a request for connection state message.  This message
+    has no payload.
+    """
+
+    pass
+
+
+# A named tuple for metadata about error codes
+ErrorData = collections.namedtuple('ErrorData', ['type_', 'struct'])
+
+
+class ConnectionError(Message):
+    """
+    Represent a connection error message.
+    """
+
+    # Structs and types for collecting the error code and decoding the
+    # error arguments
+    _error = struct.Struct('>B')
+    _args = {
+        0: None,
+        1: ErrorData(
+            collections.namedtuple('UnknownProtocol', ['protocol']),
+            struct.Struct('>B'),
+        ),
+    }
+
+    # Recognized error codes
+    error = enum.EnumSet(
+        enum.Enum('no error', 0),
+        enum.Enum('unknown protocol', 1),
+    ).attr
+
+    @classmethod
+    def _decode(cls, **kwargs):
+        """
+        Decode a connection error message.
+
+        :param bytes payload: The connection error message.
+
+        :param **kwargs: Other keyword arguments to pass to the
+                         constructor.
+
+        :returns: An appropriately initialized instance of the
+                  connection error message class.
+        :rtype: ``ConnectionError``
+        """
+
+        # Extract the error code
+        error, = cls._error.unpack(kwargs['payload'][:cls._error.size])
+
+        # Extract the error arguments
+        error_payload = kwargs['payload'][cls._error.size:]
+        arg_dec = cls._args.get(error)
+        if arg_dec:
+            args = arg_dec.type_(*arg_dec.struct.unpack(error_payload))
+        else:
+            args = None
+
+        # Make and return the message object
+        return cls(error, args, **kwargs)
+
+    def __init__(self, error=0, args=None, **kwargs):
+        """
+        Initialize a ``ConnectionError`` instance.
+
+        :param error: The error code.
+        :param args: Additional arguments associated with the error.
+        :param **kwargs: Additional keyword arguments to use for
+                         initializing the ``Message`` portion.
+        """
+
+        # Initialize the Message
+        super(ConnectionError, self).__init__(**kwargs)
+
+        # Save the data
+        self.error = error
+        self.args = args
+
+    def _encode(self):
+        """
+        Assemble the payload.  The payload will be appended to the carrier
+        protocol header to produce a complete protocol message.
+
+        :returns: The assembled payload.
+        :rtype: ``bytes``
+        """
+
+        # Convert the error code first
+        payload = self._error.pack(int(self.error))
+
+        # Do we have an argument encoder?
+        arg_enc = self._args.get(int(self.error))
+        if arg_enc is None:
+            return payload
+
+        # Encode the arguments and return the assembled payload
+        return payload + arg_enc[1].pack(*self.args)
+
+    @attrs.FilterAttr
+    def args(self, args):
+        """
+        The error arguments.  This will be a ``namedtuple`` specific to
+        the error code.
+        """
+
+        # Allow args to be set to None
+        if args is None:
+            return None
+
+        # If there's no encoder, arguments must be None
+        arg_enc = self._args.get(int(self.error))
+        if arg_enc is None:
+            return None
+
+        # Convert to the appropriate type
+        if not isinstance(args, arg_enc.type_):
+            return arg_enc.type_(*args)
+
+        # No conversion necessary
+        return args
+
+
+@Message.register(0)
+def _protocol0(**kwargs):
+    """
+    Decode protocol 0 messages.
+
+    :param carrier_flags: The carrier protocol flags.
+
+    :returns: An appropriate instance of a subclass of ``Message``
+              representing the protocol 0 message.
+    :rtype: ``Message``
+    """
+
+    # Handle error and reply flags
+    if 'error' in kwargs['carrier_flags']:
+        return ConnectionError._decode(**kwargs)
+    elif 'reply' in kwargs['carrier_flags']:
+        return ConnectionState._decode(**kwargs)
+
+    # Requests are simple, so there's no additional decoding to do
+    return RequestConnectionState(**kwargs)

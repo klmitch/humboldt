@@ -44,45 +44,44 @@ class TestRecvAll(object):
 
 class TestMessage(object):
     def test_register_base(self, mocker):
-        mocker.patch.dict(message.Message._protocols, clear=True)
+        mocker.patch.dict(message.Message._decoders, clear=True)
 
         decorator = message.Message.register(5)
 
         assert callable(decorator)
-        assert message.Message._protocols == {}
+        assert message.Message._decoders == {}
 
-        cls = mocker.Mock()
+        func = mocker.Mock()
 
-        result = decorator(cls)
+        result = decorator(func)
 
-        assert result is cls
-        assert cls.PROTOCOL == 5
-        assert message.Message._protocols == {5: cls}
+        assert result is func
+        assert message.Message._decoders == {5: func}
 
     def test_register_low_proto(self, mocker):
-        mocker.patch.dict(message.Message._protocols, clear=True)
+        mocker.patch.dict(message.Message._decoders, clear=True)
 
         with pytest.raises(TypeError):
             message.Message.register(-1)
-        assert message.Message._protocols == {}
+        assert message.Message._decoders == {}
 
     def test_register_high_proto(self, mocker):
-        mocker.patch.dict(message.Message._protocols, clear=True)
+        mocker.patch.dict(message.Message._decoders, clear=True)
 
         with pytest.raises(TypeError):
             message.Message.register(256)
-        assert message.Message._protocols == {}
+        assert message.Message._decoders == {}
 
     def test_register_duplicate_proto(self, mocker):
-        mocker.patch.dict(message.Message._protocols, clear=True)
-        message.Message._protocols[5] = 'proto'
+        mocker.patch.dict(message.Message._decoders, clear=True)
+        message.Message._decoders[5] = 'proto'
 
         with pytest.raises(TypeError):
             message.Message.register(5)
-        assert message.Message._protocols == {5: 'proto'}
+        assert message.Message._decoders == {5: 'proto'}
 
     def test_decode_header_only(self, mocker):
-        mocker.patch.dict(message.Message._protocols, clear=True)
+        mocker.patch.dict(message.Message._decoders, clear=True)
         mock_recvall = mocker.patch.object(
             message, '_recvall', return_value=b'\0\0\0\4'
         )
@@ -108,7 +107,7 @@ class TestMessage(object):
         assert int(flags) == 0
 
     def test_decode_vers_flags(self, mocker):
-        mocker.patch.dict(message.Message._protocols, clear=True)
+        mocker.patch.dict(message.Message._decoders, clear=True)
         mock_recvall = mocker.patch.object(
             message, '_recvall', return_value=b'\70\3\0\4'
         )
@@ -134,7 +133,7 @@ class TestMessage(object):
         assert int(flags) == 0x8
 
     def test_decode_with_payload(self, mocker):
-        mocker.patch.dict(message.Message._protocols, clear=True)
+        mocker.patch.dict(message.Message._decoders, clear=True)
         mock_recvall = mocker.patch.object(
             message, '_recvall', side_effect=[
                 b'\0\0\0\22',
@@ -162,7 +161,7 @@ class TestMessage(object):
         )
 
     def test_decode_header_only_short(self, mocker):
-        mocker.patch.dict(message.Message._protocols, clear=True)
+        mocker.patch.dict(message.Message._decoders, clear=True)
         mock_recvall = mocker.patch.object(
             message, '_recvall', return_value=b'\0\0\0'
         )
@@ -179,7 +178,7 @@ class TestMessage(object):
         assert not mock_init.called
 
     def test_decode_with_payload_short(self, mocker):
-        mocker.patch.dict(message.Message._protocols, clear=True)
+        mocker.patch.dict(message.Message._decoders, clear=True)
         mock_recvall = mocker.patch.object(
             message, '_recvall', side_effect=[
                 b'\0\0\0\22',
@@ -201,9 +200,9 @@ class TestMessage(object):
         assert not mock_init.called
 
     def test_decode_header_only_registered(self, mocker):
-        mocker.patch.dict(message.Message._protocols, clear=True)
+        mocker.patch.dict(message.Message._decoders, clear=True)
         proto = mocker.Mock()
-        message.Message._protocols[0] = proto
+        message.Message._decoders[0] = proto
         mock_recvall = mocker.patch.object(
             message, '_recvall', return_value=b'\0\0\0\4'
         )
@@ -213,12 +212,12 @@ class TestMessage(object):
 
         result = message.Message.decode('sock')
 
-        assert result == proto._decode.return_value
+        assert result == proto.return_value
         mock_recvall.assert_called_once_with(
             'sock', message.Message._carrier.size
         )
         assert not mock_init.called
-        proto._decode.assert_called_once_with(
+        proto.assert_called_once_with(
             carrier_version=0,
             carrier_flags=mocker.ANY,
             protocol=0,
@@ -227,9 +226,9 @@ class TestMessage(object):
         )
 
     def test_decode_with_payload_registered(self, mocker):
-        mocker.patch.dict(message.Message._protocols, clear=True)
+        mocker.patch.dict(message.Message._decoders, clear=True)
         proto = mocker.Mock()
-        message.Message._protocols[0] = proto
+        message.Message._decoders[0] = proto
         mock_recvall = mocker.patch.object(
             message, '_recvall', side_effect=[
                 b'\0\0\0\22',
@@ -242,14 +241,14 @@ class TestMessage(object):
 
         result = message.Message.decode('sock')
 
-        assert result == proto._decode.return_value
+        assert result == proto.return_value
         mock_recvall.assert_has_calls([
             mocker.call('sock', message.Message._carrier.size),
             mocker.call('sock', 14),
         ])
         assert mock_recvall.call_count == 2
         assert not mock_init.called
-        proto._decode.assert_called_once_with(
+        proto.assert_called_once_with(
             carrier_version=0,
             carrier_flags=mocker.ANY,
             protocol=0,
@@ -398,16 +397,14 @@ class TestMessage(object):
 
 
 class TestConnectionState(object):
-    def test_decode_base(self, mocker):
+    def test_decode(self, mocker):
         mock_init = mocker.patch.object(
             message.ConnectionState, '__init__', return_value=None
         )
-        flags = message.Message.carrier_flags.eset.flagset('reply')
         node_id = uuid.uuid4()
         payload = b'\200\377\0\0' + node_id.bytes
 
         result = message.ConnectionState._decode(
-            carrier_flags=flags,
             payload=payload,
             a=1, b=2, c=3,
         )
@@ -415,32 +412,10 @@ class TestConnectionState(object):
         assert isinstance(result, message.ConnectionState)
         mock_init.assert_called_once_with(
             mocker.ANY, 255, node_id,
-            carrier_flags=flags,
             payload=payload,
             a=1, b=2, c=3,
         )
         assert int(mock_init.call_args[0][0]) == 0x80
-
-    def test_decode_other(self, mocker):
-        mock_init = mocker.patch.object(
-            message.ConnectionState, '__init__', return_value=None
-        )
-        flags = message.Message.carrier_flags.eset.flagset('error')
-        node_id = uuid.uuid4()
-        payload = b'\200\377\0\0' + node_id.bytes
-
-        result = message.ConnectionState._decode(
-            carrier_flags=flags,
-            payload=payload,
-            a=1, b=2, c=3,
-        )
-
-        assert isinstance(result, message.ConnectionState)
-        mock_init.assert_called_once_with(
-            carrier_flags=flags,
-            payload=payload,
-            a=1, b=2, c=3,
-        )
 
     def test_init_base(self, mocker):
         mock_init = mocker.patch.object(
@@ -469,25 +444,13 @@ class TestConnectionState(object):
         assert result.node_id == node_id
         mock_init.assert_called_once_with(a=1, b=2, c=3)
 
-    def test_encode_reply(self):
+    def test_encode(self):
         node_id = uuid.uuid4()
-        obj = message.ConnectionState(
-            'client', 'ERROR', node_id, carrier_flags='reply'
-        )
+        obj = message.ConnectionState('client', 'ERROR', node_id)
 
         result = obj._encode()
 
         assert result == b'\200\377\0\0' + node_id.bytes
-
-    def test_encode_other(self):
-        node_id = uuid.uuid4()
-        obj = message.ConnectionState(
-            'client', 'ERROR', node_id
-        )
-
-        result = obj._encode()
-
-        assert result == b''
 
     def test_node_id_none(self):
         result = message.ConnectionState.node_id.prepare('instance', None)
@@ -509,3 +472,181 @@ class TestConnectionState(object):
         result = message.ConnectionState.node_id.prepare('instance', node_id)
 
         assert result is node_id
+
+
+class TypeForTest(object):
+    pass
+
+
+class TestConnectionError(object):
+    def test_decode_0(self, mocker):
+        mock_init = mocker.patch.object(
+            message.ConnectionError, '__init__', return_value=None
+        )
+        payload = b'\0'
+
+        result = message.ConnectionError._decode(
+            payload=payload,
+            a=1, b=2, c=3,
+        )
+
+        assert isinstance(result, message.ConnectionError)
+        mock_init.assert_called_once_with(
+            0, None,
+            payload=payload,
+            a=1, b=2, c=3,
+        )
+
+    def test_decode_1(self, mocker):
+        mock_init = mocker.patch.object(
+            message.ConnectionError, '__init__', return_value=None
+        )
+        payload = b'\1\5'
+
+        result = message.ConnectionError._decode(
+            payload=payload,
+            a=1, b=2, c=3,
+        )
+
+        assert isinstance(result, message.ConnectionError)
+        mock_init.assert_called_once_with(
+            1, (5,),
+            payload=payload,
+            a=1, b=2, c=3,
+        )
+
+    def test_init_base(self, mocker):
+        mock_init = mocker.patch.object(
+            message.Message, '__init__', return_value=None
+        )
+
+        result = message.ConnectionError(a=1, b=2, c=3)
+
+        assert int(result.error) == 0
+        assert result.args is None
+        mock_init.assert_called_once_with(a=1, b=2, c=3)
+
+    def test_init_alt(self, mocker):
+        mock_init = mocker.patch.object(
+            message.Message, '__init__', return_value=None
+        )
+
+        result = message.ConnectionError(1, (5,), a=1, b=2, c=3)
+
+        assert int(result.error) == 1
+        assert result.args == (5,)
+        mock_init.assert_called_once_with(a=1, b=2, c=3)
+
+    def test_encode_0(self):
+        obj = message.ConnectionError(0, None)
+
+        result = obj._encode()
+
+        assert result == b'\0'
+
+    def test_encode_1(self):
+        obj = message.ConnectionError(1, (5,))
+
+        result = obj._encode()
+
+        assert result == b'\1\5'
+
+    def test_args_none(self, mocker):
+        instance = mocker.Mock(error=0, _args={})
+
+        result = message.ConnectionError.args.prepare(instance, None)
+
+        assert result is None
+
+    def test_args_noenc(self, mocker):
+        instance = mocker.Mock(error=0, _args={})
+
+        result = message.ConnectionError.args.prepare(instance, ('spam',))
+
+        assert result is None
+
+    def test_args_convert(self, mocker):
+        mock_init = mocker.patch.object(
+            TypeForTest, '__init__', return_value=None
+        )
+        instance = mocker.Mock(
+            error=0,
+            _args={
+                0: message.ErrorData(TypeForTest, 'spam'),
+            },
+        )
+
+        result = message.ConnectionError.args.prepare(instance, ('spam',))
+
+        assert isinstance(result, TypeForTest)
+        mock_init.assert_called_once_with('spam')
+
+    def test_args_noconvert(self, mocker):
+        arg = TypeForTest()
+        mock_init = mocker.patch.object(
+            TypeForTest, '__init__', return_value=None
+        )
+        instance = mocker.Mock(
+            error=0,
+            _args={
+                0: message.ErrorData(TypeForTest, 'spam'),
+            },
+        )
+
+        result = message.ConnectionError.args.prepare(instance, arg)
+
+        assert result is arg
+        assert not mock_init.called
+
+
+class TestProtocol0(object):
+    def test_base(self, mocker):
+        mock_ConnectionError = mocker.patch.object(message, 'ConnectionError')
+        mock_ConnectionState = mocker.patch.object(message, 'ConnectionState')
+        mock_RequestConnectionState = mocker.patch.object(
+            message, 'RequestConnectionState'
+        )
+        flags = message.Message.carrier_flags.eset.flagset()
+
+        result = message._protocol0(carrier_flags=flags, a=1, b=2, c=3)
+
+        assert result == mock_RequestConnectionState.return_value
+        assert not mock_ConnectionError._decode.called
+        assert not mock_ConnectionState._decode.called
+        mock_RequestConnectionState.assert_called_once_with(
+            carrier_flags=flags, a=1, b=2, c=3
+        )
+
+    def test_error(self, mocker):
+        mock_ConnectionError = mocker.patch.object(message, 'ConnectionError')
+        mock_ConnectionState = mocker.patch.object(message, 'ConnectionState')
+        mock_RequestConnectionState = mocker.patch.object(
+            message, 'RequestConnectionState'
+        )
+        flags = message.Message.carrier_flags.eset.flagset('error')
+
+        result = message._protocol0(carrier_flags=flags, a=1, b=2, c=3)
+
+        assert result == mock_ConnectionError._decode.return_value
+        mock_ConnectionError._decode.assert_called_once_with(
+            carrier_flags=flags, a=1, b=2, c=3
+        )
+        assert not mock_ConnectionState._decode.called
+        assert not mock_RequestConnectionState.called
+
+    def test_state(self, mocker):
+        mock_ConnectionError = mocker.patch.object(message, 'ConnectionError')
+        mock_ConnectionState = mocker.patch.object(message, 'ConnectionState')
+        mock_RequestConnectionState = mocker.patch.object(
+            message, 'RequestConnectionState'
+        )
+        flags = message.Message.carrier_flags.eset.flagset('reply')
+
+        result = message._protocol0(carrier_flags=flags, a=1, b=2, c=3)
+
+        assert result == mock_ConnectionState._decode.return_value
+        assert not mock_ConnectionError._decode.called
+        mock_ConnectionState._decode.assert_called_once_with(
+            carrier_flags=flags, a=1, b=2, c=3
+        )
+        assert not mock_RequestConnectionState.called
