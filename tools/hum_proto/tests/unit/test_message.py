@@ -80,7 +80,7 @@ class TestMessage(object):
             message.Message.register(5)
         assert message.Message._decoders == {5: 'proto'}
 
-    def test_decode_header_only(self, mocker):
+    def test_recv_header_only(self, mocker):
         mocker.patch.dict(message.Message._decoders, clear=True)
         mock_recvall = mocker.patch.object(
             message, '_recvall', return_value=b'\0\0\0\4'
@@ -89,7 +89,7 @@ class TestMessage(object):
             message.Message, '__init__', return_value=None
         )
 
-        result = message.Message.decode('sock')
+        result = message.Message.recv('sock')
 
         assert isinstance(result, message.Message)
         mock_recvall.assert_called_once_with(
@@ -106,7 +106,7 @@ class TestMessage(object):
         assert isinstance(flags, message.enum.FlagSet)
         assert int(flags) == 0
 
-    def test_decode_vers_flags(self, mocker):
+    def test_recv_vers_flags(self, mocker):
         mocker.patch.dict(message.Message._decoders, clear=True)
         mock_recvall = mocker.patch.object(
             message, '_recvall', return_value=b'\70\3\0\4'
@@ -115,7 +115,7 @@ class TestMessage(object):
             message.Message, '__init__', return_value=None
         )
 
-        result = message.Message.decode('sock')
+        result = message.Message.recv('sock')
 
         assert isinstance(result, message.Message)
         mock_recvall.assert_called_once_with(
@@ -132,7 +132,7 @@ class TestMessage(object):
         assert isinstance(flags, message.enum.FlagSet)
         assert int(flags) == 0x8
 
-    def test_decode_with_payload(self, mocker):
+    def test_recv_with_payload(self, mocker):
         mocker.patch.dict(message.Message._decoders, clear=True)
         mock_recvall = mocker.patch.object(
             message, '_recvall', side_effect=[
@@ -144,7 +144,7 @@ class TestMessage(object):
             message.Message, '__init__', return_value=None
         )
 
-        result = message.Message.decode('sock')
+        result = message.Message.recv('sock')
 
         assert isinstance(result, message.Message)
         mock_recvall.assert_has_calls([
@@ -160,7 +160,7 @@ class TestMessage(object):
             _bytes=b'\0\0\0\22this is a test',
         )
 
-    def test_decode_header_only_short(self, mocker):
+    def test_recv_header_only_short(self, mocker):
         mocker.patch.dict(message.Message._decoders, clear=True)
         mock_recvall = mocker.patch.object(
             message, '_recvall', return_value=b'\0\0\0'
@@ -169,7 +169,7 @@ class TestMessage(object):
             message.Message, '__init__', return_value=None
         )
 
-        result = message.Message.decode('sock')
+        result = message.Message.recv('sock')
 
         assert result is None
         mock_recvall.assert_called_once_with(
@@ -177,7 +177,7 @@ class TestMessage(object):
         )
         assert not mock_init.called
 
-    def test_decode_with_payload_short(self, mocker):
+    def test_recv_with_payload_short(self, mocker):
         mocker.patch.dict(message.Message._decoders, clear=True)
         mock_recvall = mocker.patch.object(
             message, '_recvall', side_effect=[
@@ -189,7 +189,7 @@ class TestMessage(object):
             message.Message, '__init__', return_value=None
         )
 
-        result = message.Message.decode('sock')
+        result = message.Message.recv('sock')
 
         assert result is None
         mock_recvall.assert_has_calls([
@@ -199,7 +199,7 @@ class TestMessage(object):
         assert mock_recvall.call_count == 2
         assert not mock_init.called
 
-    def test_decode_header_only_registered(self, mocker):
+    def test_recv_header_only_registered(self, mocker):
         mocker.patch.dict(message.Message._decoders, clear=True)
         proto = mocker.Mock()
         message.Message._decoders[0] = proto
@@ -210,7 +210,7 @@ class TestMessage(object):
             message.Message, '__init__', return_value=None
         )
 
-        result = message.Message.decode('sock')
+        result = message.Message.recv('sock')
 
         assert result == proto.return_value
         mock_recvall.assert_called_once_with(
@@ -225,7 +225,7 @@ class TestMessage(object):
             _bytes=b'\0\0\0\4',
         )
 
-    def test_decode_with_payload_registered(self, mocker):
+    def test_recv_with_payload_registered(self, mocker):
         mocker.patch.dict(message.Message._decoders, clear=True)
         proto = mocker.Mock()
         message.Message._decoders[0] = proto
@@ -239,7 +239,7 @@ class TestMessage(object):
             message.Message, '__init__', return_value=None
         )
 
-        result = message.Message.decode('sock')
+        result = message.Message.recv('sock')
 
         assert result == proto.return_value
         mock_recvall.assert_has_calls([
@@ -316,12 +316,12 @@ class TestMessage(object):
         assert obj._payload is None
         assert obj._bytes is None
 
-    def test_encode(self, mocker):
+    def test_send(self, mocker):
         mocker.patch.object(message.Message, 'bytes', b'1234')
         sock = mocker.Mock()
         obj = message.Message()
 
-        obj.encode(sock)
+        obj.send(sock)
 
         sock.sendall.assert_called_once_with(b'1234')
 

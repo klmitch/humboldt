@@ -107,9 +107,9 @@ class Message(object):
         return decorator
 
     @classmethod
-    def decode(cls, sock):
+    def recv(cls, sock):
         """
-        Decode the next message from a socket.
+        Get the next message from a socket.
 
         :param sock: A socket from which bytes may be read.
 
@@ -230,7 +230,7 @@ class Message(object):
         self._payload = None
         self._bytes = None
 
-    def encode(self, sock):
+    def send(self, sock):
         """
         Encode the message to a sock.
 
