@@ -13,6 +13,8 @@
 # permissions and limitations under the License.
 
 import collections
+import itertools
+import shlex
 import struct
 import uuid
 
@@ -20,6 +22,134 @@ import six
 
 from hum_proto import attrs
 from hum_proto import enum
+
+
+def _flagger(value):
+    """
+    Conversion routine for flags.  Accepts ints or comma-separated
+    strings.
+
+    :param str value: The value to convert.
+
+    :returns: A value of an appropriate type.
+    """
+
+    try:
+        # Convert as an integer
+        return int(value)
+    except ValueError:
+        # Convert as a comma-separated list
+        return [v.strip() for v in value.split(',')]
+
+
+def _enumer(value):
+    """
+    Conversion routine for enumeration values.  Accepts ints or
+    strings.
+
+    :param str value: The value to convert.
+
+    :returns: A value of an appropriate type.
+    """
+
+    try:
+        # Convert as an integer
+        return int(value)
+    except ValueError:
+        # Return the string unchanged
+        return value
+
+
+# Simple escape sequences for _byter()
+_escapes = {
+    "'": ord("'"),
+    '"': ord('"'),
+    'a': ord('\a'),
+    'b': ord('\b'),
+    'f': ord('\f'),
+    'n': ord('\n'),
+    'r': ord('\r'),
+    't': ord('\t'),
+    'v': ord('\v'),
+}
+
+
+def _byter(value):
+    """
+    Conversion routine for bytes values.  Converts a value to a bytes
+    literal.  This interprets escapes similarly to how Python does it,
+    with a little more strictness with respect to octal escapes.
+
+    :param str value: The value to convert.
+
+    :returns: A bytes value.
+    :rtype: ``bytes``
+    """
+
+    # Have to build this up manually, possibly from integers
+    result = bytearray()
+
+    # Split on backslashes
+    last_empty = False
+    for i, part in enumerate(value.split('\\')):
+        escape = i > 0
+
+        # Look out for doubled escapes
+        if last_empty:
+            result.append(ord('\\'))
+            last_empty = False
+            escape = False
+        elif escape and not part:
+            last_empty = True
+            continue
+
+        pos = 0
+        if escape:
+            # Handle the escape sequence
+            if part[pos] in _escapes:
+                # Simple escape sequence
+                result.append(_escapes[part[pos]])
+                pos += 1
+            elif part[pos] == 'x':
+                # Hexadecimal escape sequence
+                if len(part) < 3:
+                    raise ValueError('Invalid \\x escape')
+                result.append(int(part[1:3], 16))
+                pos += 3
+            elif '0' <= part[pos] <= '7':
+                # Octal escape sequence
+                c = 0
+                while pos < min(3, len(part)) and '0' <= part[pos] <= '7':
+                    # Check if this would cause an overflow
+                    if ((c << 3) | int(part[pos], 8)) > 255:
+                        break
+
+                    # Update
+                    c = (c << 3) | int(part[pos], 8)
+                    pos += 1
+
+                result.append(c)
+            else:
+                # Unrecognized escape
+                result.append(ord('\\'))
+
+        # Add the rest of the part
+        result += bytearray(ord(c) for c in part[pos:])
+
+    return bytes(result)
+
+
+def _splitter(value):
+    """
+    Conversion routine for lists.  Accepts comma-separated strings.
+
+    :param str value: The value to convert.
+
+    :returns: A list of strings.
+    :rtype: ``list``
+    """
+
+    return [v.strip() for v in value.split(',')]
 
 
 def _recvall(sock, size):
@@ -50,7 +180,58 @@ def _recvall(sock, size):
     return data
 
 
-@six.add_metaclass(attrs.InvalidatingAttrMeta)
+class MessageMeta(attrs.InvalidatingAttrMeta):
+    """
+    A metaclass for classes inheriting from ``Message``.  This
+    metaclass builds on ``attrs.InvalidatingAttrMeta`` to keep a
+    dictionary of subclasses that may then be resolved using the
+    ``resolve()`` class method.
+    """
+
+    _classes = {}
+
+    def __init__(cls, name, bases, namespace):
+        """
+        Initialize a newly constructed ``Message`` subclass.
+
+        :param str name: The name of the new class.
+        :param tuple bases: A tuple of the class's base classes.
+        :param dict namespace: The new class's namespace.
+        """
+
+        # First, initiate InvalidatingAttrMeta
+        super(MessageMeta, cls).__init__(name, bases, namespace)
+
+        # Now make sure the class is referenced in _classes
+        xlated = name.lower()
+        if xlated not in cls._classes:
+            cls._classes[xlated] = cls
+
+    @classmethod
+    def resolve(mcs, name):
+        """
+        Given the name of a message class, look up its implementation.
+        This routine is liberal in what it accepts, accepting any
+        string case.
+
+        :param str name: The name of the message class to look up.
+
+        :returns: The message class, or ``None`` if the specific
+                  message class does not exist.
+        """
+
+        return mcs._classes.get(name.lower())
+
+
+class CommandError(Exception):
+    """
+    Represents errors in commands.
+    """
+
+    pass
+
+
+@six.add_metaclass(MessageMeta)
 class Message(object):
     """
     Represent a protocol message.
@@ -62,10 +243,16 @@ class Message(object):
     # Information related to the carrier protocol
     _carrier_default_version = 0
     _carrier = struct.Struct('>BBH')
-    _carrier_attrs = ['carrier_version', 'carrier_flags', 'protocol']
+    _carrier_attrs = collections.OrderedDict([
+        ('carrier_version', int),
+        ('carrier_flags', _flagger),
+        ('protocol', int),
+    ])
 
     # Attributes specific to this message type to display
-    MSG_ATTRS = ['payload']
+    MSG_ATTRS = collections.OrderedDict([
+        ('payload', _byter),
+    ])
 
     # Carrier protocol flags
     carrier_flags = enum.FlagSetAttr(enum.EnumSet(
@@ -151,6 +338,78 @@ class Message(object):
 
         return obj
 
+    @classmethod
+    def interpret(cls, command):
+        """
+        Interpret a command.  The command string is split using ``shlex``.
+        The first tokens are taken to name the message type, which
+        should be followed by tokens of the form "param=value".  The
+        "param" should be the name of a recognized message parameter,
+        and the "value" should be an appropriate value for that
+        parameter.
+
+        :param str command: The command to interpret.
+
+        :returns: An instance of an appropriate ``Message`` subclass
+                  representing the desired value.
+        :rtype: ``Message``
+        """
+
+        # Begin by using shlex to tokenize command
+        tokens = shlex.split(command)
+
+        # Figure out which tokens compose the message type
+        for i in range(len(tokens)):
+            if '=' in tokens[i]:
+                type_name = ''.join(tokens[:i])
+                tokens = tokens[i:]
+                break
+        else:
+            type_name = ''.join(tokens)
+            tokens = []
+
+        # Look up the message type
+        type_ = cls.resolve(type_name)
+        if type_ is None:
+            raise CommandError('Unknown message type "%s"' % type_name)
+
+        # Now interpret the tokens
+        params = {}
+        for tok in tokens:
+            key, sep, value = tok.partition('=')
+            if not sep:
+                raise CommandError(
+                    'No value for parameter "%s" for message type %s' %
+                    (key, type_.__name__)
+                )
+            elif (key not in type_._carrier_attrs and
+                  key not in type_.MSG_ATTRS):
+                raise CommandError(
+                    'Unknown parameter "%s" for message type %s' %
+                    (key, type_.__name__)
+                )
+
+            # Save the value
+            try:
+                if key in type_._carrier_attrs:
+                    params[key] = type_._carrier_attrs[key](value)
+                else:
+                    params[key] = type_.MSG_ATTRS[key](value)
+            except Exception as err:
+                raise CommandError(
+                    'Bad value "%s" for parameter "%s" (message type %s): %s' %
+                    (value, key, type_.__name__, err)
+                )
+
+        # Create the message
+        try:
+            return type_(**params)
+        except Exception as err:
+            raise CommandError(
+                'Unable to create requested message type %s: %s' %
+                (type_.__name__, err)
+            )
+
     def __init__(self, carrier_version=None, carrier_flags=None,
                  protocol=None, payload=None, _bytes=None):
         """
@@ -193,7 +452,8 @@ class Message(object):
 
         # Assemble the attribute values
         values = ', '.join('%s=%r' % (attr, getattr(self, attr, None))
-                           for attr in self._carrier_attrs + self.MSG_ATTRS)
+                           for attr in itertools.chain(self._carrier_attrs,
+                                                       self.MSG_ATTRS))
 
         return '<%s size=%d, %s>' % (self.__class__.__name__,
                                      len(self), values)
@@ -308,7 +568,11 @@ class ConnectionState(Message):
     _message = struct.Struct('>BB2x16s')
 
     # Attributes specific to this message type to display
-    MSG_ATTRS = ['flags', 'status', 'node_id']
+    MSG_ATTRS = collections.OrderedDict([
+        ('flags', _flagger),
+        ('status', _enumer),
+        ('node_id', str),
+    ])
 
     # Flags for the connection state message
     flags = enum.EnumSet(
@@ -422,6 +686,11 @@ class ConnectionError(Message):
             struct.Struct('>B'),
         ),
     }
+
+    MSG_ATTRS = collections.OrderedDict([
+        ('error', _enumer),
+        ('args', _splitter),
+    ])
 
     # Recognized error codes
     error = enum.EnumSet(
