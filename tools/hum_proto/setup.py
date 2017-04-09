@@ -59,6 +59,7 @@ setuptools.setup(
     tests_require=readreq('test-requirements.txt'),
     entry_points={
         'console_scripts': [
+            'hum_proto = hum_proto.main:main.console',
         ],
     },
 )
