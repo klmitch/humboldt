@@ -20,6 +20,7 @@
 #include <errno.h>
 #include <event2/listener.h>
 #include <event2/util.h>
+#include <inttypes.h>
 #include <stdint.h>
 #include <string.h>
 #include <syslog.h>
@@ -219,7 +220,7 @@ ep_addr_set_fromaddr(ep_addr_t *addr, struct sockaddr *sockaddr, int addrlen)
   /* Save the address itself (the hard part) */
 #ifdef AF_LOCAL
   if (sockaddr->sa_family == AF_LOCAL) {
-    addr->ea_addr.eau_local = *((struct sockaddr_un *)sockaddr);
+    memcpy(&addr->ea_addr.eau_addr, sockaddr, addrlen);
     addr->ea_flags |= EA_LOCAL;
     return;
   }
@@ -414,8 +415,8 @@ _endpoint_listener(struct evconnlistener *listener, evutil_socket_t sock,
   ep_addr_describe(&cliaddr, address, sizeof(address));
 
   log_emit(endpoint->ep_runtime->rt_config, LOG_INFO,
-	   "Connection from %s at %s on endpoint %s%s",
-	   type, address, ep_addr, configured);
+	   "Connection from %s at %s (id %" PRIdPTR ") on endpoint %s%s",
+	   type, address, sock, ep_addr, configured);
 
   /* Create the connection; responsibility for sock passes here */
   connection_create(endpoint->ep_runtime, endpoint, sock, &cliaddr);
@@ -435,12 +436,12 @@ _endpoint_create(runtime_t *runtime, ep_config_t *config, ep_addr_t *addr)
 			      sizeof(conf_addr)));
 
   log_emit(runtime->rt_config, LOG_INFO, "Creating endpoint for %s%s",
-	   address, conf_addr);
+	   address, configured);
 
   /* Allocate an item */
   if (!(endpoint = alloc(&endpoints))) {
     log_emit(runtime->rt_config, LOG_WARNING,
-	     "Out of memory creating endpoint %s%s", address, conf_addr);
+	     "Out of memory creating endpoint %s%s", address, configured);
     return 0;
   }
 

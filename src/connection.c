@@ -21,6 +21,7 @@
 #include <event2/buffer.h>
 #include <event2/bufferevent.h>
 #include <event2/util.h>
+#include <inttypes.h>
 #include <stdarg.h>
 #include <string.h>
 #include <uuid.h>
@@ -45,9 +46,9 @@ _connection_read(struct bufferevent *bev, connection_t *conn)
     /* Grab off a message */
     if (!protocol_buf_recv(in, &msg)) {
       log_emit(conn->con_runtime->rt_config, LOG_NOTICE,
-	       "Error receiving message from %s: %s",
+	       "Error receiving message from %s (id %" PRIdPTR "): %s",
 	       ep_addr_describe(&conn->con_remote, address, sizeof(address)),
-	       strerror(errno));
+	       conn->con_socket, strerror(errno));
       connection_destroy(conn, 0);
       return;
     }
@@ -57,14 +58,17 @@ _connection_read(struct bufferevent *bev, connection_t *conn)
       return;
 
     log_emit(conn->con_runtime->rt_config, LOG_DEBUG,
-	     "Protocol %u message received from %s", msg->pb_protocol,
-	     ep_addr_describe(&conn->con_remote, address, sizeof(address)));
+	     "Protocol %u message received from %s (id %" PRIdPTR ")",
+	     msg->pb_protocol,
+	     ep_addr_describe(&conn->con_remote, address, sizeof(address)),
+	     conn->con_socket);
 
     /* Process the message */
     if (protocol_buf_dispatch(msg, conn) == PBR_CONNECTION_CLOSE) {
       log_emit(conn->con_runtime->rt_config, LOG_INFO,
-	       "Closing connection %s",
-	       ep_addr_describe(&conn->con_remote, address, sizeof(address)));
+	       "Closing connection %s (id %" PRIdPTR ")",
+	       ep_addr_describe(&conn->con_remote, address, sizeof(address)),
+	       conn->con_socket);
       connection_destroy(conn, 0);
       return;
     }
@@ -79,8 +83,9 @@ _connection_write(struct bufferevent *bev, connection_t *conn)
   if ((conn->con_flags & CONN_FLAG_CLOSING) &&
       evbuffer_get_length(bufferevent_get_output(bev)) == 0) {
     log_emit(conn->con_runtime->rt_config, LOG_DEBUG,
-	     "Initiating deferred close on connection to %s",
-	     ep_addr_describe(&conn->con_remote, address, sizeof(address)));
+	     "Initiating deferred close on connection to %s (id %" PRIdPTR ")",
+	     ep_addr_describe(&conn->con_remote, address, sizeof(address)),
+	     conn->con_socket);
     connection_destroy(conn, 1);
   }
 }
@@ -93,13 +98,14 @@ _connection_event(struct bufferevent *bev, short events, connection_t *conn)
   if (events & (BEV_EVENT_ERROR | BEV_EVENT_EOF)) {
     if (events & BEV_EVENT_ERROR)
       log_emit(conn->con_runtime->rt_config, LOG_NOTICE,
-	       "Error on connection to %s: %s",
+	       "Error on connection to %s (id %" PRIdPTR "): %s",
 	       ep_addr_describe(&conn->con_remote, address, sizeof(address)),
-	       strerror(errno));
+	       conn->con_socket, strerror(errno));
     else
       log_emit(conn->con_runtime->rt_config, LOG_INFO,
-	       "Closing connection %s",
-	       ep_addr_describe(&conn->con_remote, address, sizeof(address)));
+	       "Closing connection %s (id %" PRIdPTR ")",
+	       ep_addr_describe(&conn->con_remote, address, sizeof(address)),
+	       conn->con_socket);
 
     connection_destroy(conn, 1);
   }
@@ -115,8 +121,8 @@ connection_create(runtime_t *runtime, endpoint_t *endpoint,
   /* Allocate an item */
   if (!(connection = alloc(&connections))) {
     log_emit(runtime->rt_config, LOG_WARNING,
-	     "Out of memory creating connection for %s",
-	     ep_addr_describe(addr, address, sizeof(address)));
+	     "Out of memory creating connection for %s (id %" PRIdPTR ")",
+	     ep_addr_describe(addr, address, sizeof(address)), sock);
     evutil_closesocket(sock);
     return 0;
   }
@@ -149,8 +155,8 @@ connection_create(runtime_t *runtime, endpoint_t *endpoint,
   if (!(connection->con_root = bufferevent_socket_new(
 	  runtime->rt_evbase, sock, 0))) {
     log_emit(runtime->rt_config, LOG_WARNING,
-	     "Out of memory creating bufferevent for %s",
-	     ep_addr_describe(addr, address, sizeof(address)));
+	     "Out of memory creating bufferevent for %s (id %" PRIdPTR ")",
+	     ep_addr_describe(addr, address, sizeof(address)), sock);
     evutil_closesocket(sock);
     release(&connections, connection);
     return 0;
@@ -168,8 +174,8 @@ connection_create(runtime_t *runtime, endpoint_t *endpoint,
   /* Enable it for reading or writing */
   if (bufferevent_enable(connection->con_root, EV_READ)) {
     log_emit(runtime->rt_config, LOG_WARNING,
-	     "Unable to enable bufferevent for %s",
-	     ep_addr_describe(addr, address, sizeof(address)));
+	     "Unable to enable bufferevent for %s (id %" PRIdPTR ")",
+	     ep_addr_describe(addr, address, sizeof(address)), sock);
     bufferevent_free(connection->con_root);
     evutil_closesocket(sock);
     release(&connections, connection);
@@ -194,12 +200,16 @@ connection_create(runtime_t *runtime, endpoint_t *endpoint,
 int
 connection_send_state(connection_t *conn)
 {
+  char address[ADDR_DESCRIPTION];
   protocol_buf_t pbuf = PROTOCOL_BUF_INIT(PROTOCOL_REPLY, 0);
 
   /* Give a hint as to the packet size */
   if (!protocol_buf_hint(&pbuf, 20)) {
     log_emit(conn->con_runtime->rt_config, LOG_WARNING,
-	     "Out of memory initializing protocol buffer");
+	     "Out of memory initializing protocol buffer for %s (id %"
+	     PRIdPTR ")",
+	     ep_addr_describe(&conn->con_remote, address, sizeof(address)),
+	     conn->con_socket);
     return 0;
   }
 
@@ -210,18 +220,19 @@ connection_send_state(connection_t *conn)
       !protocol_buf_append(&pbuf, conn->con_runtime->rt_config->cf_uuid,
 			   sizeof(uuid_t))) {
     log_emit(conn->con_runtime->rt_config, LOG_WARNING,
-	     "Out of memory constructing connection state packet");
+	     "Out of memory constructing connection state packet for "
+	     "%s (id %" PRIdPTR ")",
+	     ep_addr_describe(&conn->con_remote, address, sizeof(address)),
+	     conn->con_socket);
     return 0;
   }
 
   /* Send it */
   if (!protocol_buf_send(&pbuf, conn)) {
-    char address[ADDR_DESCRIPTION];
-
     log_emit(conn->con_runtime->rt_config, LOG_INFO,
-	     "Unable to send connection state to %s: %s",
+	     "Unable to send connection state to %s (id %" PRIdPTR "): %s",
 	     ep_addr_describe(&conn->con_remote, address, sizeof(address)),
-	     strerror(errno));
+	     conn->con_socket, strerror(errno));
 
     return 0;
   }
@@ -272,9 +283,9 @@ connection_report_error(connection_t *conn, conn_error_t error, ...)
 
   /* Log the error */
   log_emit(conn->con_runtime->rt_config, LOG_NOTICE,
-	   "Error from %s: %s",
+	   "Error from %s (id %" PRIdPTR "): %s",
 	   ep_addr_describe(&conn->con_remote, address, sizeof(address)),
-	   errmsg);
+	   conn->con_socket, errmsg);
 }
 
 pbuf_result_t
@@ -318,8 +329,9 @@ connection_destroy(connection_t *conn, int immediate)
     conn->con_flags |= CONN_FLAG_CLOSING;
     if (!bufferevent_enable(conn->con_root, EV_WRITE)) {
       log_emit(conn->con_runtime->rt_config, LOG_DEBUG,
-	       "Deferring close of connection to %s",
-	       ep_addr_describe(&conn->con_remote, address, sizeof(address)));
+	       "Deferring close of connection to %s (id %" PRIdPTR ")",
+	       ep_addr_describe(&conn->con_remote, address, sizeof(address)),
+	       conn->con_socket);
       return;
     }
   }
