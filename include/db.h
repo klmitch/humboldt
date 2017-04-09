@@ -178,4 +178,16 @@ struct _link_elem_s {
     _le->le_head = 0;					\
   } while (0)
 
+/** \brief Determine if an element is linked.
+ *
+ * Tests to see whether a linked list element is linked to a linked
+ * list.
+ *
+ * \param[in]		elem	The element to check.
+ *
+ * \returns	A true value if the element is linked, false
+ *		otherwise.
+ */
+#define linked(elem)	((elem)->le_head)
+
 #endif /* _HUMBOLDT_DB_H */

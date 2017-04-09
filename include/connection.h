@@ -18,6 +18,7 @@
 #define _HUMBOLDT_CONNECTION_H
 
 #include <event2/util.h>	/* for evutil_socket_t */
+#include <stdint.h>		/* for uint32_t */
 
 #include "common.h"		/* for magic_t */
 #include "endpoint.h"		/* for endpoint types */
@@ -102,8 +103,13 @@ struct _connection_s {
   endpoint_t   *con_endpoint;	/**< Endpoint connection came in on */
   ep_type_t	con_type;	/**< Type of connection: peer or client? */
   conn_state_t	con_state;	/**< Connection state */
+  uint32_t	con_flags;	/**< Miscellaneous non-state flags */
   struct bufferevent
-	       *con_bev;	/**< Libevent eventbuffer for connection */
+	       *con_bev;	/**< Libevent bufferevent for connection */
+  struct bufferevent
+	       *con_root;	/**< Root bufferevent for socket */
+  evutil_socket_t
+		con_socket;	/**< Connection socket */
   runtime_t    *con_runtime;	/**< Humboldt runtime */
 };
 
@@ -114,6 +120,14 @@ struct _connection_s {
  * initialize a connection.
  */
 #define CONNECTION_MAGIC 0x12f955f3
+
+/** \brief Connection is closing.
+ *
+ * This non-state flag indicates that the connection is being closed.
+ * This is usually sent in the event that there is data in the output
+ * buffer for the connection.
+ */
+#define CONN_FLAG_CLOSING	0x80000000
 
 /** \brief Allocate and initialize a connection.
  *
@@ -198,7 +212,12 @@ pbuf_result_t connection_process(protocol_buf_t *msg, connection_t *conn);
  * \param[in,out]	conn	The connection to destroy.  No more
  *				references should be made to this
  *				object after this call.
+ * \param[in]		immediate
+ *				If set to a true value, indicates that
+ *				the connection should be destroyed
+ *				immediately, without waiting for any
+ *				buffered data to be written.
  */
-void connection_destroy(connection_t *conn);
+void connection_destroy(connection_t *conn, int immediate);
 
 #endif /* _HUMBOLDT_CONNECTION_H */

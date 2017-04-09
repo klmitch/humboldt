@@ -48,7 +48,7 @@ _connection_read(struct bufferevent *bev, connection_t *conn)
 	       "Error receiving message from %s: %s",
 	       ep_addr_describe(&conn->con_remote, address, sizeof(address)),
 	       strerror(errno));
-      connection_destroy(conn);
+      connection_destroy(conn, 0);
       return;
     }
 
@@ -65,9 +65,23 @@ _connection_read(struct bufferevent *bev, connection_t *conn)
       log_emit(conn->con_runtime->rt_config, LOG_INFO,
 	       "Closing connection %s",
 	       ep_addr_describe(&conn->con_remote, address, sizeof(address)));
-      connection_destroy(conn);
+      connection_destroy(conn, 0);
       return;
     }
+  }
+}
+
+static void
+_connection_write(struct bufferevent *bev, connection_t *conn)
+{
+  char address[ADDR_DESCRIPTION];
+
+  if ((conn->con_flags & CONN_FLAG_CLOSING) &&
+      evbuffer_get_length(bufferevent_get_output(bev)) == 0) {
+    log_emit(conn->con_runtime->rt_config, LOG_DEBUG,
+	     "Initiating deferred close on connection to %s",
+	     ep_addr_describe(&conn->con_remote, address, sizeof(address)));
+    connection_destroy(conn, 1);
   }
 }
 
@@ -87,7 +101,7 @@ _connection_event(struct bufferevent *bev, short events, connection_t *conn)
 	       "Closing connection %s",
 	       ep_addr_describe(&conn->con_remote, address, sizeof(address)));
 
-    connection_destroy(conn);
+    connection_destroy(conn, 1);
   }
 }
 
@@ -112,6 +126,8 @@ connection_create(runtime_t *runtime, endpoint_t *endpoint,
   connection->con_remote = *addr;
   connection->con_endpoint = endpoint;
   connection->con_type = endpoint->ep_config->epc_type;
+  connection->con_flags = 0;
+  connection->con_socket = sock;
   connection->con_runtime = runtime;
 
   /* Initialize the connection state */
@@ -127,8 +143,8 @@ connection_create(runtime_t *runtime, endpoint_t *endpoint,
     connection->con_state.cst_flags |= CONN_STATE_SEC;
 
   /* Create the bufferevent */
-  if (!(connection->con_bev = bufferevent_socket_new(
-	  runtime->rt_evbase, sock, BEV_OPT_CLOSE_ON_FREE))) {
+  if (!(connection->con_root = bufferevent_socket_new(
+	  runtime->rt_evbase, sock, 0))) {
     log_emit(runtime->rt_config, LOG_WARNING,
 	     "Out of memory creating bufferevent for %s",
 	     ep_addr_describe(addr, address, sizeof(address)));
@@ -137,17 +153,22 @@ connection_create(runtime_t *runtime, endpoint_t *endpoint,
     return 0;
   }
 
+  /* Set the top of the bufferevent chain */
+  connection->con_bev = connection->con_root;
+
   /* Set the bufferevent callbacks */
   bufferevent_setcb(connection->con_bev,
-		    (bufferevent_data_cb)_connection_read, 0,
+		    (bufferevent_data_cb)_connection_read,
+		    (bufferevent_data_cb)_connection_write,
 		    (bufferevent_event_cb)_connection_event, connection);
 
   /* Enable it for reading or writing */
-  if (bufferevent_enable(connection->con_bev, EV_READ | EV_WRITE)) {
+  if (bufferevent_enable(connection->con_root, EV_READ)) {
     log_emit(runtime->rt_config, LOG_WARNING,
 	     "Unable to enable bufferevent for %s",
 	     ep_addr_describe(addr, address, sizeof(address)));
-    bufferevent_free(connection->con_bev); /* closes sock */
+    bufferevent_free(connection->con_root);
+    evutil_closesocket(sock);
     release(&connections, connection);
     return 0;
   }
@@ -160,7 +181,7 @@ connection_create(runtime_t *runtime, endpoint_t *endpoint,
 
   /* Send the connection state */
   if (!connection_send_state(connection)) {
-    connection_destroy(connection);
+    connection_destroy(connection, 1);
     return 0;
   }
 
@@ -240,7 +261,8 @@ connection_report_error(connection_t *conn, conn_error_t error, ...)
   }
 
   /* Make a best effort to send the message */
-  protocol_buf_send(&pbuf, conn);
+  if (!protocol_buf_send(&pbuf, conn))
+    bufferevent_flush(conn->con_bev, EV_WRITE, BEV_FINISHED);
 
   /* Free the error message */
   protocol_buf_free(&pbuf);
@@ -273,16 +295,41 @@ connection_process(protocol_buf_t *msg, connection_t *conn)
 }
 
 void
-connection_destroy(connection_t *conn)
+connection_destroy(connection_t *conn, int immediate)
 {
+  char address[ADDR_DESCRIPTION];
+
   common_verify(conn, CONNECTION_MAGIC);
 
-  /* Remove from the linked list */
-  link_pop(&conn->con_link);
+  /* Start by removing it from the linked list, regardless */
+  if (linked(&conn->con_link))
+    link_pop(&conn->con_link);
 
-  /* Free the bufferevent, which will close the socket */
-  bufferevent_free(conn->con_bev);
+  /* Disable reading from the bufferevent */
+  bufferevent_disable(conn->con_root, EV_READ);
+
+  /* Check if there's pending data */
+  if (!immediate &&
+      evbuffer_get_length(bufferevent_get_output(conn->con_root))) {
+    /* We'll do a deferred destroy */
+    conn->con_flags |= CONN_FLAG_CLOSING;
+    if (!bufferevent_enable(conn->con_root, EV_WRITE)) {
+      log_emit(conn->con_runtime->rt_config, LOG_DEBUG,
+	       "Deferring close of connection to %s",
+	       ep_addr_describe(&conn->con_remote, address, sizeof(address)));
+      return;
+    }
+  }
+
+  /* Free the bufferevents */
+  if (conn->con_bev != conn->con_root)
+    bufferevent_free(conn->con_bev);
+  bufferevent_free(conn->con_root);
+  conn->con_root = 0;
   conn->con_bev = 0;
+
+  /* Close the socket */
+  evutil_closesocket(conn->con_socket);
 
   /* Release it to the free list */
   release(&connections, conn);
