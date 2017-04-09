@@ -18,6 +18,7 @@
 
 #include "include/common.h"
 #include "include/configuration.h"
+#include "include/log.h"
 #include "include/ssl.h"
 #include "include/yaml_util.h"
 
@@ -65,10 +66,23 @@ ssl_conf_processor(const char *key, config_t *conf, yaml_ctx_t *ctx,
   }
 }
 
+ssl_ctx_t
+ssl_ctx_init(config_t *conf)
+{
+  common_verify(conf, CONFIG_MAGIC);
+
+  return 0; /* SSL not available */
+}
+
 #else /* HAVE_OPENSSL */
 
+#include <openssl/err.h>
+#include <openssl/ssl.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
+
+#define SESSION_CACHE_ID	"Humboldt"
 
 static void
 proc_cert_chain(const char *key, ssl_conf_t *conf, yaml_ctx_t *ctx,
@@ -171,6 +185,107 @@ ssl_conf_processor(const char *key, config_t *conf, yaml_ctx_t *ctx,
   conf->cf_ssl = ssl_conf;
 }
 
+static void
+log_errors(config_t *conf, const char *fmt, ...)
+{
+  unsigned long errcode;
+  char context_buf[256];
+  const char *context = context_buf;
+  va_list ap;
+
+  /* Construct the context */
+  va_start(ap, fmt);
+  vsnprintf(context_buf, sizeof(context_buf), fmt, ap);
+  va_end(ap);
+
+  /* Log all errors in the queue */
+  while ((errcode = ERR_get_error())) {
+    log_emit(conf, LOG_WARNING, "OpenSSL error%s%s: %s", context ? " " : "",
+	     context ? context : "", ERR_error_string(errcode, 0));
+    context = 0;
+  }
+
+  /* If there were no errors, log something */
+  if (context)
+    log_emit(conf, LOG_WARNING, "OpenSSL error %s: Unknown error", context);
+}
+
+ssl_ctx_t
+ssl_ctx_init(config_t *conf)
+{
+  static int lib_initialized = 0;
+  SSL_CTX *ctx;
+
+  common_verify(conf, CONFIG_MAGIC);
+
+  /* Check if the SSL configuration is available */
+  if (!conf->cf_ssl)
+    return 0;
+
+  common_verify(conf->cf_ssl, SSL_CONF_MAGIC);
+
+  /* First step, initialize the library if needed */
+  if (!lib_initialized) {
+    SSL_load_error_strings();
+    SSL_library_init();
+    lib_initialized = 1;
+  }
+
+  /* Next, allocate a context */
+  if (!(ctx = SSL_CTX_new(SSLv23_method())))
+    return 0;
+
+  /* Restrict the versions of SSL we'll allow */
+  SSL_CTX_set_options(ctx, SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3);
+
+  /* Enable the session cache */
+  SSL_CTX_set_session_cache_mode(ctx, SSL_SESS_CACHE_BOTH);
+  SSL_CTX_set_session_id_context(ctx, (unsigned char *)SESSION_CACHE_ID,
+				 sizeof(SESSION_CACHE_ID));
+
+  /* Request peer certificates */
+  SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, 0);
+
+  /* Set the cipher list */
+  if (conf->cf_ssl->sc_ciphers &&
+      !SSL_CTX_set_cipher_list(ctx, conf->cf_ssl->sc_ciphers)) {
+    log_errors(conf, "while setting ciphers to \"%s\"",
+	       conf->cf_ssl->sc_ciphers);
+    log_emit(conf, LOG_WARNING, "Disabling SSL");
+    SSL_CTX_free(ctx);
+    return 0;
+  }
+
+  /* Configure the certificate chain file */
+  if (SSL_CTX_use_certificate_chain_file(ctx, conf->cf_ssl->sc_cert_chain)
+      != 1) {
+    log_errors(conf, "while setting certificate chain file to \"%s\"",
+	       conf->cf_ssl->sc_cert_chain);
+    log_emit(conf, LOG_WARNING, "Disabling SSL");
+    SSL_CTX_free(ctx);
+    return 0;
+  }
+
+  /* Configure the private key file */
+  if (SSL_CTX_use_PrivateKey_file(ctx, conf->cf_ssl->sc_private_key,
+				  SSL_FILETYPE_PEM) != 1) {
+    log_errors(conf, "while setting private key file to \"%s\"",
+	       conf->cf_ssl->sc_private_key);
+    log_emit(conf, LOG_WARNING, "Disabling SSL");
+    SSL_CTX_free(ctx);
+    return 0;
+  }
+
+  log_emit(conf, LOG_INFO, "SSL enabled");
+
+  return (ssl_ctx_t)ctx;
+}
+
+#endif /* HAVE_OPENSSL */
+
+/* Defined regardless of whether OpenSSL is available, for
+ * completeness.
+ */
 void
 ssl_conf_free(ssl_conf_t *conf)
 {
@@ -187,5 +302,3 @@ ssl_conf_free(ssl_conf_t *conf)
   conf->sc_magic = 0;
   free(conf);
 }
-
-#endif /* HAVE_OPENSSL */

@@ -55,6 +55,9 @@ initialize_runtime(runtime_t *runtime, config_t *conf)
     log_emit(conf, LOG_INFO, "Libevent initialized with method %s",
 	     event_base_get_method(runtime->rt_evbase));
 
+  /* Initialize SSL */
+  runtime->rt_ssl = ssl_ctx_init(conf);
+
   /* Initialize the endpoints and connections lists */
   link_head_init(&runtime->rt_endpoints);
   link_head_init(&runtime->rt_connections);

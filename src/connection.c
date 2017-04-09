@@ -141,6 +141,9 @@ connection_create(runtime_t *runtime, endpoint_t *endpoint,
   if (endpoint->ep_addr.ea_flags & EA_LOCAL)
     /* Local connections are considered secure */
     connection->con_state.cst_flags |= CONN_STATE_SEC;
+  else if (runtime->rt_ssl)
+    /* SSL is available for non-local connections if set */
+    connection->con_state.cst_flags |= CONN_STATE_TLS;
 
   /* Create the bufferevent */
   if (!(connection->con_root = bufferevent_socket_new(

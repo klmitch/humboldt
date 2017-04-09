@@ -24,6 +24,13 @@
  */
 typedef struct _ssl_conf_s ssl_conf_t;
 
+/** \brief SSL context.
+ *
+ * The SSL context.  The presence or absence of this pointer in the
+ * runtime is responsible for controlling whether SSL is available.
+ */
+typedef void *ssl_ctx_t;
+
 #include "common.h"		/* for magic_t */
 #include "configuration.h"	/* for config_t */
 #include "yaml_util.h"		/* for yaml_ctx_t, yaml_node_t */
@@ -71,5 +78,21 @@ void ssl_conf_processor(const char *key, config_t *conf,
  * \param[in]		conf	The SSL configuration.
  */
 void ssl_conf_free(ssl_conf_t *conf);
+
+/** \brief Initialize SSL context.
+ *
+ * This function is called by initialize_runtime() to initialize the
+ * SSL context.  It is also responsible for initializing the OpenSSL
+ * library.  If SSL cannot be initialized--for instance, if OpenSSL
+ * was not enabled, or if the SSL parameters are not set--then a \c
+ * NULL pointer will be returned.
+ *
+ * \param[in]		conf	A pointer to the top-level #config_t
+ *                              configuration structure.
+ *
+ * \return	A pointer to an SSL context, or \c NULL if SSL cannot
+ *		be initialized.
+ */
+ssl_ctx_t ssl_ctx_init(config_t *conf);
 
 #endif /* _HUMBOLDT_SSL_H */

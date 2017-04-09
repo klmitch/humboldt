@@ -21,6 +21,7 @@
 #include "common.h"		/* for magic_t */
 #include "configuration.h"	/* for config_t */
 #include "db.h"			/* for link_head_t */
+#include "ssl.h"		/* for ssl_ctx_t */
 
 /** \brief Runtime data.
  *
@@ -38,6 +39,7 @@ struct _runtime_s {
   magic_t		rt_magic;	/**< Magic number */
   config_t	       *rt_config;	/**< Configuration */
   struct event_base    *rt_evbase;	/**< Libevent event loop */
+  ssl_ctx_t		rt_ssl;		/**< Pointer to the SSL context */
   link_head_t		rt_endpoints;	/**< Open endpoints */
   link_head_t		rt_connections;	/**< Open connections */
   struct event	       *rt_inthandle;	/**< SIGINT handler */
