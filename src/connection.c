@@ -39,6 +39,7 @@ static void
 _connection_read(struct bufferevent *bev, connection_t *conn)
 {
   protocol_buf_t *msg;
+  pbuf_result_t result;
   struct evbuffer *in = bufferevent_get_input(bev);
   char address[ADDR_DESCRIPTION];
 
@@ -64,7 +65,13 @@ _connection_read(struct bufferevent *bev, connection_t *conn)
 	     conn->con_socket);
 
     /* Process the message */
-    if (protocol_buf_dispatch(msg, conn) == PBR_CONNECTION_CLOSE) {
+    result = protocol_buf_dispatch(msg, conn);
+
+    /* We can now release the message */
+    protocol_buf_release(msg);
+
+    /* Should we close the connection? */
+    if (result == PBR_CONNECTION_CLOSE) {
       log_emit(conn->con_runtime->rt_config, LOG_INFO,
 	       "Closing connection %s (id %" PRIdPTR ")",
 	       ep_addr_describe(&conn->con_remote, address, sizeof(address)),
