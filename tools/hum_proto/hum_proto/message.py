@@ -259,6 +259,9 @@ class Message(object):
         enum.Enum('error', 0x4, True),
     ), '_invalidate_bytes')
 
+    # Default carrier protocol flags for this class
+    default_carrier_flags = None
+
     @classmethod
     def register(cls, proto):
         """
@@ -422,7 +425,7 @@ class Message(object):
 
         # Save all the carrier protocol data
         self._carrier_version = carrier_version
-        self.carrier_flags = carrier_flags
+        self.carrier_flags = carrier_flags or self.default_carrier_flags
         self._protocol = protocol
         self._payload = payload
         self._bytes = _bytes
@@ -558,6 +561,8 @@ class ConnectionState(Message):
     Represent a connection state message.
     """
 
+    PROTOCOL = 0
+
     # A struct format describing the contents of a connection state
     # reply
     _message = struct.Struct('>BB2x16s')
@@ -568,6 +573,8 @@ class ConnectionState(Message):
         ('status', _enumer),
         ('node_id', str),
     ])
+
+    default_carrier_flags = 'reply'
 
     # Flags for the connection state message
     flags = enum.EnumSet(
@@ -659,7 +666,7 @@ class RequestConnectionState(Message):
     has no payload.
     """
 
-    pass
+    PROTOCOL = 0
 
 
 # A named tuple for metadata about error codes
@@ -670,6 +677,8 @@ class ConnectionError(Message):
     """
     Represent a connection error message.
     """
+
+    PROTOCOL = 0
 
     # Structs and types for collecting the error code and decoding the
     # error arguments
@@ -686,6 +695,8 @@ class ConnectionError(Message):
         ('error', _enumer),
         ('args', _splitter),
     ])
+
+    default_carrier_flags = 'error'
 
     # Recognized error codes
     error = enum.EnumSet(
@@ -803,3 +814,54 @@ def _protocol0(**kwargs):
 
     # Requests are simple, so there's no additional decoding to do
     return RequestConnectionState(**kwargs)
+
+
+class StartTLSError(Message):
+    """
+    Represent an error for the STARTTLS exchange.  Humboldt sends
+    these messages when it is unable to accept a TLS exchange.
+    """
+
+    PROTOCOL = 2
+    default_carrier_flags = 'error'
+
+
+class StartTLSReply(Message):
+    """
+    Represent a reply for the STARTTLS exchange.  Humboldt sends these
+    messages when it accepts a STARTTLS request and is ready to accept
+    a TLS exchange.
+    """
+
+    PROTOCOL = 2
+    default_carrier_flags = 'reply'
+
+
+class StartTLSRequest(Message):
+    """
+    Represent a request for the STARTTLS exchange.  Clients send these
+    messages when they wish to initiate a TLS exchange.
+    """
+
+    PROTOCOL = 2
+
+
+@Message.register(2)
+def _protocol2(**kwargs):
+    """
+    Decode protocol 2 messages.
+
+    :param carrier_flags: The carrier protocol flags.
+
+    :returns: An appropriate instance of a subclass of ``Message``
+              representing the protocol 0 message.
+    :rtype: ``Message``
+    """
+
+    # Handle error and reply flags
+    if 'error' in kwargs['carrier_flags']:
+        return StartTLSError(**kwargs)
+    elif 'reply' in kwargs['carrier_flags']:
+        return StartTLSReply(**kwargs)
+
+    return StartTLSRequest(**kwargs)

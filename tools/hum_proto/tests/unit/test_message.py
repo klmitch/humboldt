@@ -568,10 +568,27 @@ class TestMessage(object):
             c=type_.MSG_ATTRS['c'].return_value,
         )
 
-    def test_init(self):
+    def test_init_base(self):
         result = message.Message(
             carrier_version='carrier_version',
             carrier_flags=0x8,
+            protocol='protocol',
+            payload='payload',
+            _bytes='_bytes',
+        )
+
+        assert result._carrier_version == 'carrier_version'
+        assert int(result.carrier_flags) == 0x8
+        assert result._protocol == 'protocol'
+        assert result._payload == 'payload'
+        assert result._bytes == '_bytes'
+
+    def test_init_default_flags(self, mocker):
+        mocker.patch.object(
+            message.Message, 'default_carrier_flags', 'reply'
+        )
+        result = message.Message(
+            carrier_version='carrier_version',
             protocol='protocol',
             payload='payload',
             _bytes='_bytes',
@@ -962,3 +979,50 @@ class TestProtocol0(object):
             carrier_flags=flags, a=1, b=2, c=3
         )
         assert not mock_RequestConnectionState.called
+
+
+class TestProtocol2(object):
+    def test_request(self, mocker):
+        mock_StartTLSError = mocker.patch.object(message, 'StartTLSError')
+        mock_StartTLSReply = mocker.patch.object(message, 'StartTLSReply')
+        mock_StartTLSRequest = mocker.patch.object(message, 'StartTLSRequest')
+        flags = message.Message.carrier_flags.eset.flagset()
+
+        result = message._protocol2(carrier_flags=flags, a=1, b=2, c=3)
+
+        assert result == mock_StartTLSRequest.return_value
+        assert not mock_StartTLSError.called
+        assert not mock_StartTLSReply.called
+        mock_StartTLSRequest.assert_called_once_with(
+            carrier_flags=flags, a=1, b=2, c=3
+        )
+
+    def test_error(self, mocker):
+        mock_StartTLSError = mocker.patch.object(message, 'StartTLSError')
+        mock_StartTLSReply = mocker.patch.object(message, 'StartTLSReply')
+        mock_StartTLSRequest = mocker.patch.object(message, 'StartTLSRequest')
+        flags = message.Message.carrier_flags.eset.flagset('error')
+
+        result = message._protocol2(carrier_flags=flags, a=1, b=2, c=3)
+
+        assert result == mock_StartTLSError.return_value
+        mock_StartTLSError.assert_called_once_with(
+            carrier_flags=flags, a=1, b=2, c=3
+        )
+        assert not mock_StartTLSReply.called
+        assert not mock_StartTLSRequest.called
+
+    def test_reply(self, mocker):
+        mock_StartTLSError = mocker.patch.object(message, 'StartTLSError')
+        mock_StartTLSReply = mocker.patch.object(message, 'StartTLSReply')
+        mock_StartTLSRequest = mocker.patch.object(message, 'StartTLSRequest')
+        flags = message.Message.carrier_flags.eset.flagset('reply')
+
+        result = message._protocol2(carrier_flags=flags, a=1, b=2, c=3)
+
+        assert result == mock_StartTLSReply.return_value
+        assert not mock_StartTLSError.called
+        mock_StartTLSReply.assert_called_once_with(
+            carrier_flags=flags, a=1, b=2, c=3
+        )
+        assert not mock_StartTLSRequest.called
