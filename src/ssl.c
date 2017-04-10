@@ -16,9 +16,14 @@
 
 #include <config.h>
 
+#include <inttypes.h>
+
 #include "include/common.h"
 #include "include/configuration.h"
+#include "include/connection.h"
+#include "include/endpoint.h"
 #include "include/log.h"
+#include "include/protocol.h"
 #include "include/ssl.h"
 #include "include/yaml_util.h"
 
@@ -72,6 +77,41 @@ ssl_ctx_init(config_t *conf)
   common_verify(conf, CONFIG_MAGIC);
 
   return 0; /* SSL not available */
+}
+
+pbuf_result_t
+ssl_process(protocol_buf_t *msg, connection_t *conn)
+{
+  char address[ADDR_DESCRIPTION];
+  protocol_buf_t pbuf = PROTOCOL_BUF_INIT(PROTOCOL_ERROR, 2);
+
+  common_verify(msg, PROTOCOL_BUF_MAGIC);
+  common_verify(conn, CONNECTION_MAGIC);
+
+  /* For error messages, do nothing */
+  if (msg->pb_flags & PROTOCOL_ERROR)
+    return PBR_MSG_PROCESSED;
+
+  /* If we got a reply, we have to close the connection, since we
+   * don't actually know how to SSL.
+   */
+  else if (msg->pb_flags & PROTOCOL_REPLY)
+    return PBR_CONNECTION_CLOSE;
+
+  /* OK, it was a request for SSL; send back an error */
+  if (!protocol_buf_send(&pbuf, conn)) {
+    log_emit(conn->con_runtime->rt_config, LOG_WARNING,
+	     "Out of memory constructing SSL error packet for %s (id %"
+	     PRIdPTR ")",
+	     ep_addr_describe(&conn->con_remote, address, sizeof(address)),
+	     conn->con_socket);
+    return PBR_CONNECTION_CLOSE;
+  }
+
+  /* Release the buffer memory */
+  protocol_buf_free(&pbuf);
+
+  return PBR_MSG_PROCESSED;
 }
 
 #else /* HAVE_OPENSSL */
@@ -279,6 +319,41 @@ ssl_ctx_init(config_t *conf)
   log_emit(conf, LOG_INFO, "SSL enabled");
 
   return (ssl_ctx_t)ctx;
+}
+
+pbuf_result_t
+ssl_process(protocol_buf_t *msg, connection_t *conn)
+{
+  char address[ADDR_DESCRIPTION];
+  protocol_buf_t pbuf = PROTOCOL_BUF_INIT(PROTOCOL_ERROR, 2);
+
+  common_verify(msg, PROTOCOL_BUF_MAGIC);
+  common_verify(conn, CONNECTION_MAGIC);
+
+  /* For error messages, do nothing */
+  if (msg->pb_flags & PROTOCOL_ERROR)
+    return PBR_MSG_PROCESSED;
+
+  /* If we got a reply, we have to close the connection, since we
+   * don't actually know how to SSL.
+   */
+  else if (msg->pb_flags & PROTOCOL_REPLY)
+    return PBR_CONNECTION_CLOSE;
+
+  /* OK, it was a request for SSL; send back an error */
+  if (!protocol_buf_send(&pbuf, conn)) {
+    log_emit(conn->con_runtime->rt_config, LOG_WARNING,
+	     "Out of memory constructing SSL error packet for %s (id %"
+	     PRIdPTR ")",
+	     ep_addr_describe(&conn->con_remote, address, sizeof(address)),
+	     conn->con_socket);
+    return PBR_CONNECTION_CLOSE;
+  }
+
+  /* Release the buffer memory */
+  protocol_buf_free(&pbuf);
+
+  return PBR_MSG_PROCESSED;
 }
 
 #endif /* HAVE_OPENSSL */

@@ -27,6 +27,7 @@
 
 #include "include/common.h"
 #include "include/configuration.h"
+#include "include/endpoint.h"
 #include "include/log.h"
 #include "include/ssl.h"
 #include "include/yaml_util.h"

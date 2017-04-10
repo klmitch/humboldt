@@ -24,11 +24,6 @@
 #include <sys/un.h>		/* for sockaddr_un */
 #include <yaml.h>		/* for yaml_node_t */
 
-#include "alloc.h"		/* for flexlist_t */
-#include "common.h"		/* for magic_t */
-#include "db.h"			/* for link_elem_t */
-#include "runtime.h"		/* for runtime_t */
-
 /* Ensure we have AF_LOCAL if possible */
 #if !defined(AF_LOCAL) && defined(AF_UNIX)
 # define AF_LOCAL		AF_UNIX
@@ -154,6 +149,11 @@ struct _ep_addr_s {
   } while (0)
 
 #define NETWORK_LEN	16
+
+#include "alloc.h"		/* for flexlist_t */
+#include "common.h"		/* for magic_t */
+#include "db.h"			/* for link_elem_t */
+#include "runtime.h"		/* for runtime_t */
 
 /** \brief Endpoint structure.
  *

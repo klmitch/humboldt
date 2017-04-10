@@ -17,12 +17,6 @@
 #ifndef _HUMBOLDT_RUNTIME_H
 #define _HUMBOLDT_RUNTIME_H
 
-#include "alloc.h"		/* for flexlist_t */
-#include "common.h"		/* for magic_t */
-#include "configuration.h"	/* for config_t */
-#include "db.h"			/* for link_head_t */
-#include "ssl.h"		/* for ssl_ctx_t */
-
 /** \brief Runtime data.
  *
  * The Humboldt runtime.  This structure contains such things as the
@@ -30,6 +24,12 @@
  * running Humboldt.
  */
 typedef struct _runtime_s runtime_t;
+
+#include "alloc.h"		/* for flexlist_t */
+#include "common.h"		/* for magic_t */
+#include "configuration.h"	/* for config_t */
+#include "db.h"			/* for link_head_t */
+#include "ssl.h"		/* for ssl_ctx_t */
 
 /** \brief Runtime structure.
  *

@@ -33,6 +33,8 @@ typedef void *ssl_ctx_t;
 
 #include "common.h"		/* for magic_t */
 #include "configuration.h"	/* for config_t */
+#include "connection.h"		/* for connection_t */
+#include "protocol.h"		/* for protocol_buf_t, pbuf_result_t */
 #include "yaml_util.h"		/* for yaml_ctx_t, yaml_node_t */
 
 /** \brief SSL configuration structure.
@@ -94,5 +96,18 @@ void ssl_conf_free(ssl_conf_t *conf);
  *		be initialized.
  */
 ssl_ctx_t ssl_ctx_init(config_t *conf);
+
+/** \brief Process received STARTTLS message.
+ *
+ * This is a protocol dispatch routine which is used to process the
+ * STARTTLS family of messages (protocol 2).
+ *
+ * \param[in]		msg	The received message to process.
+ * \param[in,out]	conn	The connection the message came in
+ *				on.
+ *
+ * \return	One of the #pbuf_result_t values.
+ */
+pbuf_result_t ssl_process(protocol_buf_t *msg, connection_t *conn);
 
 #endif /* _HUMBOLDT_SSL_H */

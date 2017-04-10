@@ -20,10 +20,6 @@
 #include <event2/util.h>	/* for evutil_socket_t */
 #include <stdint.h>		/* for uint32_t */
 
-#include "common.h"		/* for magic_t */
-#include "endpoint.h"		/* for endpoint types */
-#include "runtime.h"		/* for runtime_t */
-
 /** \brief Connection state.
  *
  * Represents a connection's state, including flags.  This information
@@ -37,8 +33,6 @@ typedef struct _conn_state_s conn_state_t;
  * Represents a connection to a client or to another peer.
  */
 typedef struct _connection_s connection_t;
-
-#include "protocol.h"	/* for protocol_buf_t; depends on connection_t */
 
 /** \brief Connection status.
  *
@@ -58,6 +52,11 @@ typedef enum _conn_error_e {
   CONN_ERR_NO_ERROR,		/**< No error has occurred */
   CONN_ERR_UNKNOWN_PROTOCOL	/**< Protocol is unknown */
 } conn_error_t;
+
+#include "common.h"		/* for magic_t */
+#include "endpoint.h"		/* for endpoint types */
+#include "runtime.h"		/* for runtime_t */
+#include "protocol.h"		/* for protocol_buf_t */
 
 /** \brief Connection state structure.
  *

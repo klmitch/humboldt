@@ -26,9 +26,12 @@
 #include "include/common.h"
 #include "include/connection.h"
 #include "include/protocol.h"
+#include "include/ssl.h"
 
 static pbuf_dispatch_t processors[] = {
-  connection_process			/* Protocol: 0 */
+  connection_process,		/* Protocol 0: Connection state */
+  0,				/* Protocol 1: PING/PONG (future) */
+  ssl_process			/* Protocol 2: SSL */
 };
 
 static freelist_t messages = FREELIST_INIT(protocol_buf_t, 0);
