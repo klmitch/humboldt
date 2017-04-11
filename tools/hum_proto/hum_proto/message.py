@@ -262,6 +262,15 @@ class Message(object):
     # Default carrier protocol flags for this class
     default_carrier_flags = None
 
+    # Optional method that allows an action to be taken when a message
+    # is sent.  The method will be passed the application loop object.
+    action = None
+
+    # Optional method that allows an action to be taken when a message
+    # is received.  The method will be passed the application loop
+    # object.
+    reaction = None
+
     @classmethod
     def register(cls, proto):
         """

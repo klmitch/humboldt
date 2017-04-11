@@ -293,9 +293,13 @@ class TestApplicationLoop(object):
         assert not mock_display.called
         mock_cli.invalidate.assert_called_once_with()
 
-    def test_recv_msg(self, mocker):
+    def test_recv_msg_noaction(self, mocker):
+        msg = mocker.Mock(
+            __repr__=mocker.Mock(return_value='"a message"'),
+            reaction=None,
+        )
         mock_recv = mocker.patch.object(
-            apploop.message.Message, 'recv', return_value='message'
+            apploop.message.Message, 'recv', return_value=msg
         )
         mock_close = mocker.patch.object(apploop.ApplicationLoop, '_close')
         mock_display = mocker.patch.object(apploop.ApplicationLoop, 'display')
@@ -306,8 +310,26 @@ class TestApplicationLoop(object):
 
         mock_recv.assert_called_once_with('sock')
         assert not mock_close.called
-        mock_display.assert_called_once_with('S: %r' % 'message')
+        mock_display.assert_called_once_with('S: "a message"')
         mock_cli.invalidate.assert_called_once_with()
+
+    def test_recv_msg_withaction(self, mocker):
+        msg = mocker.Mock(__repr__=mocker.Mock(return_value='"a message"'))
+        mock_recv = mocker.patch.object(
+            apploop.message.Message, 'recv', return_value=msg
+        )
+        mock_close = mocker.patch.object(apploop.ApplicationLoop, '_close')
+        mock_display = mocker.patch.object(apploop.ApplicationLoop, 'display')
+        mock_cli = mocker.patch.object(apploop.ApplicationLoop, 'cli')
+        obj = apploop.ApplicationLoop('sock')
+
+        obj._recv()
+
+        mock_recv.assert_called_once_with('sock')
+        assert not mock_close.called
+        mock_display.assert_called_once_with('S: "a message"')
+        mock_cli.invalidate.assert_called_once_with()
+        msg.reaction.assert_called_once_with(obj)
 
     def test_display(self, mocker):
         mocker.patch.object(apploop.buffer, 'Buffer')
@@ -446,8 +468,11 @@ class TestApplicationLoop(object):
             'ERROR: Failed to understand message to send: some problem'
         )
 
-    def test_send_closed(self, mocker):
-        msg = mocker.Mock(__repr__=mocker.Mock(return_value='"a message"'))
+    def test_send_closed_noaction(self, mocker):
+        msg = mocker.Mock(
+            __repr__=mocker.Mock(return_value='"a message"'),
+            action=None,
+        )
         mock_interpret = mocker.patch.object(
             apploop.message.Message, 'interpret', return_value=msg
         )
@@ -460,7 +485,39 @@ class TestApplicationLoop(object):
         mock_display.assert_called_once_with('ERROR: Connection is closed')
         assert not msg.send.called
 
-    def test_send_sent(self, mocker):
+    def test_send_closed_withaction(self, mocker):
+        msg = mocker.Mock(__repr__=mocker.Mock(return_value='"a message"'))
+        mock_interpret = mocker.patch.object(
+            apploop.message.Message, 'interpret', return_value=msg
+        )
+        mock_display = mocker.patch.object(apploop.ApplicationLoop, 'display')
+        obj = apploop.ApplicationLoop(None)
+
+        obj.send(['some', 'arguments'])
+
+        mock_interpret.assert_called_once_with(['some', 'arguments'])
+        mock_display.assert_called_once_with('ERROR: Connection is closed')
+        assert not msg.send.called
+        assert not msg.action.called
+
+    def test_send_sent_noaction(self, mocker):
+        msg = mocker.Mock(
+            __repr__=mocker.Mock(return_value='"a message"'),
+            action=None,
+        )
+        mock_interpret = mocker.patch.object(
+            apploop.message.Message, 'interpret', return_value=msg
+        )
+        mock_display = mocker.patch.object(apploop.ApplicationLoop, 'display')
+        obj = apploop.ApplicationLoop('sock')
+
+        obj.send(['some', 'arguments'])
+
+        mock_interpret.assert_called_once_with(['some', 'arguments'])
+        msg.send.assert_called_once_with('sock')
+        mock_display.assert_called_once_with('C: "a message"')
+
+    def test_send_sent_withaction(self, mocker):
         msg = mocker.Mock(__repr__=mocker.Mock(return_value='"a message"'))
         mock_interpret = mocker.patch.object(
             apploop.message.Message, 'interpret', return_value=msg
@@ -472,6 +529,7 @@ class TestApplicationLoop(object):
 
         mock_interpret.assert_called_once_with(['some', 'arguments'])
         msg.send.assert_called_once_with('sock')
+        msg.action.assert_called_once_with(obj)
         mock_display.assert_called_once_with('C: "a message"')
 
     def test_setsock_closed(self, mocker):
@@ -499,6 +557,52 @@ class TestApplicationLoop(object):
         mock_cli.eventloop.add_reader.assert_called_once_with(
             'newsock', obj._recv
         )
+
+    def test_wrap_closed(self, mocker):
+        mock_cli = mocker.patch.object(apploop.ApplicationLoop, 'cli')
+        mock_display = mocker.patch.object(apploop.ApplicationLoop, 'display')
+        wrapper = mocker.Mock()
+        obj = apploop.ApplicationLoop(None)
+
+        obj.wrap(wrapper)
+
+        assert obj.sock is None
+        assert not mock_cli.eventloop.remove_reader.called
+        assert not wrapper.called
+        assert not mock_cli.eventloop.add_reader.called
+        assert not mock_display.called
+
+    def test_wrap_open(self, mocker):
+        mock_cli = mocker.patch.object(apploop.ApplicationLoop, 'cli')
+        mock_display = mocker.patch.object(apploop.ApplicationLoop, 'display')
+        wrapper = mocker.Mock()
+        obj = apploop.ApplicationLoop('sock')
+
+        obj.wrap(wrapper)
+
+        assert obj.sock == wrapper.return_value
+        mock_cli.eventloop.remove_reader.assert_called_once_with('sock')
+        wrapper.assert_called_once_with('sock')
+        mock_cli.eventloop.add_reader.assert_called_once_with(
+            wrapper.return_value, obj._recv
+        )
+        mock_display.assert_called_once_with('Socket wrapped')
+
+    def test_wrap_open_message(self, mocker):
+        mock_cli = mocker.patch.object(apploop.ApplicationLoop, 'cli')
+        mock_display = mocker.patch.object(apploop.ApplicationLoop, 'display')
+        wrapper = mocker.Mock()
+        obj = apploop.ApplicationLoop('sock')
+
+        obj.wrap(wrapper, 'message')
+
+        assert obj.sock == wrapper.return_value
+        mock_cli.eventloop.remove_reader.assert_called_once_with('sock')
+        wrapper.assert_called_once_with('sock')
+        mock_cli.eventloop.add_reader.assert_called_once_with(
+            wrapper.return_value, obj._recv
+        )
+        mock_display.assert_called_once_with('message')
 
     def test_run_no_sock(self, mocker):
         mock_cli = mocker.patch.object(apploop.ApplicationLoop, 'cli')

@@ -199,6 +199,10 @@ class ApplicationLoop(object):
             # Display the message
             self.display('S: %r' % msg)
 
+            # If there's a reaction, invoke it
+            if msg.reaction:
+                msg.reaction(self)
+
         # Make sure we redraw to display the message
         self.cli.invalidate()
 
@@ -318,6 +322,10 @@ class ApplicationLoop(object):
             return
         msg.send(self.sock)
 
+        # If there's an action, invoke it
+        if msg.action:
+            msg.action(self)
+
         # Display what we sent
         self.display('C: %r' % msg)
 
@@ -336,6 +344,31 @@ class ApplicationLoop(object):
         # Save the new socket and set it up for monitoring
         self.sock = newsock
         self.cli.eventloop.add_reader(self.sock, self._recv)
+
+    def wrap(self, wrapper, msg=None):
+        """
+        Wrap the socket.
+
+        :param wrapper: A callable of one argument.  This callable
+                        must take a socket object, and must return a
+                        new socket-compatible object that will be used
+                        for subsequent message sending and receiving.
+        :param str msg: A message to display to explain the wrapping.
+                        If not provided, a generic "socket wrapped"
+                        message will be displayed.
+        """
+
+        # If the socket is closed, there's nothing we can do
+        if not self.sock:
+            return
+
+        # Wrap our socket
+        self.cli.eventloop.remove_reader(self.sock)
+        self.sock = wrapper(self.sock)
+        self.cli.eventloop.add_reader(self.sock, self._recv)
+
+        # Report the fact
+        self.display(msg or 'Socket wrapped')
 
     def run(self):
         """
