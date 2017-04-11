@@ -1,8 +1,181 @@
+import socket
+
 from prompt_toolkit import buffer
+import pytest
 
 from hum_proto import apploop
 from hum_proto import message
-from hum_proto import qsock
+
+
+class ExceptionForTest(Exception):
+    pass
+
+
+class Exception2ForTest(Exception):
+    pass
+
+
+class TestConnect(object):
+    def test_local(self, mocker):
+        mock_socket = mocker.patch.object(apploop.socket, 'socket')
+        sock = mock_socket.return_value
+        mock_getaddrinfo = mocker.patch.object(apploop.socket, 'getaddrinfo')
+
+        result = apploop.connect('foo/bar')
+
+        assert result == sock
+        mock_socket.assert_called_once_with(
+            socket.AF_UNIX, socket.SOCK_STREAM, 0
+        )
+        sock.connect.assert_called_once_with('foo/bar')
+        assert not mock_getaddrinfo.called
+
+    def test_host(self, mocker):
+        mock_socket = mocker.patch.object(apploop.socket, 'socket')
+        sock = mock_socket.return_value
+        mock_getaddrinfo = mocker.patch.object(
+            apploop.socket, 'getaddrinfo',
+            return_value=[
+                ('family', 'socktype', 'proto', 'canon', 'sockaddr'),
+            ],
+        )
+
+        result = apploop.connect('host.name')
+
+        assert result == sock
+        mock_getaddrinfo.assert_called_once_with(
+            'host.name', 7300, socket.AF_UNSPEC, socket.SOCK_STREAM
+        )
+        mock_socket.assert_called_once_with('family', 'socktype', 'proto')
+        sock.connect.assert_called_once_with('sockaddr')
+
+    def test_host_with_port(self, mocker):
+        mock_socket = mocker.patch.object(apploop.socket, 'socket')
+        sock = mock_socket.return_value
+        mock_getaddrinfo = mocker.patch.object(
+            apploop.socket, 'getaddrinfo',
+            return_value=[
+                ('family', 'socktype', 'proto', 'canon', 'sockaddr'),
+            ],
+        )
+
+        result = apploop.connect('host.name:1234')
+
+        assert result == sock
+        mock_getaddrinfo.assert_called_once_with(
+            'host.name', '1234', socket.AF_UNSPEC, socket.SOCK_STREAM
+        )
+        mock_socket.assert_called_once_with('family', 'socktype', 'proto')
+        sock.connect.assert_called_once_with('sockaddr')
+
+    def test_ipv6(self, mocker):
+        mock_socket = mocker.patch.object(apploop.socket, 'socket')
+        sock = mock_socket.return_value
+        mock_getaddrinfo = mocker.patch.object(
+            apploop.socket, 'getaddrinfo',
+            return_value=[
+                ('family', 'socktype', 'proto', 'canon', 'sockaddr'),
+            ],
+        )
+
+        result = apploop.connect('[::1]')
+
+        assert result == sock
+        mock_getaddrinfo.assert_called_once_with(
+            '::1', 7300, socket.AF_UNSPEC, socket.SOCK_STREAM
+        )
+        mock_socket.assert_called_once_with('family', 'socktype', 'proto')
+        sock.connect.assert_called_once_with('sockaddr')
+
+    def test_ipv6_with_port(self, mocker):
+        mock_socket = mocker.patch.object(apploop.socket, 'socket')
+        sock = mock_socket.return_value
+        mock_getaddrinfo = mocker.patch.object(
+            apploop.socket, 'getaddrinfo',
+            return_value=[
+                ('family', 'socktype', 'proto', 'canon', 'sockaddr'),
+            ],
+        )
+
+        result = apploop.connect('[::1]:1234')
+
+        assert result == sock
+        mock_getaddrinfo.assert_called_once_with(
+            '::1', '1234', socket.AF_UNSPEC, socket.SOCK_STREAM
+        )
+        mock_socket.assert_called_once_with('family', 'socktype', 'proto')
+        sock.connect.assert_called_once_with('sockaddr')
+
+    def test_all_entries(self, mocker):
+        def fake_connect(sockaddr):
+            if isinstance(sockaddr, Exception):
+                raise sockaddr
+        mock_socket = mocker.patch.object(apploop.socket, 'socket')
+        sock = mock_socket.return_value
+        sock.connect.side_effect = fake_connect
+        mock_getaddrinfo = mocker.patch.object(
+            apploop.socket, 'getaddrinfo',
+            return_value=[
+                ('family1', 'socktype', 'proto', 'canon', ExceptionForTest()),
+                ('family2', 'socktype', 'proto', 'canon', ExceptionForTest()),
+                ('family3', 'socktype', 'proto', 'canon', ExceptionForTest()),
+                ('family4', 'socktype', 'proto', 'canon', 'sockaddr'),
+            ],
+        )
+
+        result = apploop.connect('host.name')
+
+        assert result == sock
+        mock_getaddrinfo.assert_called_once_with(
+            'host.name', 7300, socket.AF_UNSPEC, socket.SOCK_STREAM
+        )
+        mock_socket.assert_has_calls([
+            mocker.call('family1', 'socktype', 'proto'),
+            mocker.call().connect(mocker.ANY),
+            mocker.call('family2', 'socktype', 'proto'),
+            mocker.call().connect(mocker.ANY),
+            mocker.call('family3', 'socktype', 'proto'),
+            mocker.call().connect(mocker.ANY),
+            mocker.call('family4', 'socktype', 'proto'),
+            mocker.call().connect('sockaddr'),
+        ])
+        assert mock_socket.call_count == 4
+        assert sock.connect.call_count == 4
+
+    def test_reraise(self, mocker):
+        def fake_connect(sockaddr):
+            if isinstance(sockaddr, Exception):
+                raise sockaddr
+        mock_socket = mocker.patch.object(apploop.socket, 'socket')
+        sock = mock_socket.return_value
+        sock.connect.side_effect = fake_connect
+        mock_getaddrinfo = mocker.patch.object(
+            apploop.socket, 'getaddrinfo',
+            return_value=[
+                ('family1', 'socktype', 'proto', 'canon', ExceptionForTest()),
+                ('family2', 'socktype', 'proto', 'canon', ExceptionForTest()),
+                ('family3', 'socktype', 'proto', 'canon', ExceptionForTest()),
+                ('family4', 'socktype', 'proto', 'canon', Exception2ForTest()),
+            ],
+        )
+
+        with pytest.raises(Exception2ForTest):
+            apploop.connect('host.name')
+        mock_getaddrinfo.assert_called_once_with(
+            'host.name', 7300, socket.AF_UNSPEC, socket.SOCK_STREAM
+        )
+        mock_socket.assert_has_calls([
+            mocker.call('family1', 'socktype', 'proto'),
+            mocker.call().connect(mocker.ANY),
+            mocker.call('family2', 'socktype', 'proto'),
+            mocker.call().connect(mocker.ANY),
+            mocker.call('family3', 'socktype', 'proto'),
+            mocker.call().connect(mocker.ANY),
+            mocker.call('family4', 'socktype', 'proto'),
+            mocker.call().connect(mocker.ANY),
+        ])
+        assert mock_socket.call_count == 4
+        assert sock.connect.call_count == 4
 
 
 class TestCommand(object):
@@ -12,6 +185,7 @@ class TestCommand(object):
             pass
 
         assert test_func._command_name == 'test_func'
+        assert test_func._command_aliases == []
 
     def test_empty(self):
         @apploop.command()
@@ -19,6 +193,15 @@ class TestCommand(object):
             pass
 
         assert test_func._command_name == 'test_func'
+        assert test_func._command_aliases == []
+
+    def test_empty_aliases(self):
+        @apploop.command(aliases=['alias1', 'alias2'])
+        def test_func():
+            pass
+
+        assert test_func._command_name == 'test_func'
+        assert test_func._command_aliases == ['alias1', 'alias2']
 
     def test_named(self):
         @apploop.command('command')
@@ -26,6 +209,15 @@ class TestCommand(object):
             pass
 
         assert test_func._command_name == 'command'
+        assert test_func._command_aliases == []
+
+    def test_named_aliases(self):
+        @apploop.command('command', aliases=['alias1', 'alias2'])
+        def test_func():
+            pass
+
+        assert test_func._command_name == 'command'
+        assert test_func._command_aliases == ['alias1', 'alias2']
 
 
 class TestApplicationLoopMeta(object):
@@ -33,8 +225,10 @@ class TestApplicationLoopMeta(object):
         namespace = {
             'a': mocker.Mock(spec=[]),
             'b': 1,
-            'c': mocker.Mock(_command_name='c1'),
-            'd': mocker.Mock(_command_name='c2'),
+            'c': mocker.Mock(_command_name='c1', _command_aliases=[]),
+            'd': mocker.Mock(
+                _command_name='c2', _command_aliases=['a1', 'a2']
+            ),
         }
 
         result = apploop.ApplicationLoopMeta('TestClass', (object,), namespace)
@@ -42,111 +236,86 @@ class TestApplicationLoopMeta(object):
         assert result._commands == {
             'c1': namespace['c'],
             'c2': namespace['d'],
+            'a1': namespace['d'],
+            'a2': namespace['d'],
         }
 
 
 class TestApplicationLoop(object):
     def test_init(self, mocker):
-        mock_QueuedSocket = mocker.patch.object(apploop.qsock, 'QueuedSocket')
-        mock_Lock = mocker.patch.object(apploop.threading, 'Lock')
-
         result = apploop.ApplicationLoop('sock')
 
-        assert result.sock == mock_QueuedSocket.return_value
+        assert result.sock == 'sock'
         assert result._cli is None
         assert isinstance(result.display_buf, buffer.Buffer)
-        assert result.display_buf_lock == mock_Lock.return_value
         assert isinstance(result.command_buf, buffer.Buffer)
         assert isinstance(
             result.command_buf.accept_action, buffer.AcceptAction
         )
         assert result.command_buf.accept_action.handler == result.execute
-        mock_QueuedSocket.assert_called_once_with('sock')
 
-    def test_recvloop_nocli(self, mocker):
-        sock = mocker.Mock(**{
-            'recv.side_effect': [
-                qsock.Unsendable('unsendable'),
-                'message 1',
-                'message 2',
-                None,
-                qsock.Exit(),
-                'message 3',
-            ],
-        })
-        mocker.patch.object(apploop.qsock, 'QueuedSocket', return_value=sock)
+    def test_close_internal_closed(self, mocker):
         mock_display = mocker.patch.object(apploop.ApplicationLoop, 'display')
+        mock_cli = mocker.patch.object(apploop.ApplicationLoop, 'cli')
+        obj = apploop.ApplicationLoop(None)
+
+        obj._close()
+
+        assert not mock_display.called
+        assert not mock_cli.eventloop.remove_reader.called
+
+    def test_close_internal_open(self, mocker):
+        mock_display = mocker.patch.object(apploop.ApplicationLoop, 'display')
+        mock_cli = mocker.patch.object(apploop.ApplicationLoop, 'cli')
+        sock = mocker.Mock()
         obj = apploop.ApplicationLoop(sock)
 
-        obj._recvloop()
+        obj._close()
 
-        sock.recv.assert_has_calls([
-            mocker.call(),
-            mocker.call(),
-            mocker.call(),
-            mocker.call(),
-            mocker.call(),
-        ])
-        assert sock.recv.call_count == 5
-        mock_display.assert_has_calls([
-            mocker.call('ERROR: Failed to send: %r' % 'unsendable'),
-            mocker.call('S: %r' % 'message 1'),
-            mocker.call('S: %r' % 'message 2'),
-            mocker.call('Connection closed'),
-        ])
-        assert mock_display.call_count == 4
+        assert obj.sock is None
+        mock_display.assert_called_once_with('Connection closed')
+        mock_cli.eventloop.remove_reader.assert_called_once_with(sock)
+        sock.close.assert_called_once_with()
 
-    def test_recvloop_withcli(self, mocker):
-        sock = mocker.Mock(**{
-            'recv.side_effect': [
-                qsock.Unsendable('unsendable'),
-                'message 1',
-                'message 2',
-                None,
-                qsock.Exit(),
-                'message 3',
-            ],
-        })
-        mocker.patch.object(apploop.qsock, 'QueuedSocket', return_value=sock)
+    def test_recv_close(self, mocker):
+        mock_recv = mocker.patch.object(
+            apploop.message.Message, 'recv', return_value=None
+        )
+        mock_close = mocker.patch.object(apploop.ApplicationLoop, '_close')
         mock_display = mocker.patch.object(apploop.ApplicationLoop, 'display')
-        obj = apploop.ApplicationLoop(sock)
-        obj._cli = mocker.Mock()
+        mock_cli = mocker.patch.object(apploop.ApplicationLoop, 'cli')
+        obj = apploop.ApplicationLoop('sock')
 
-        obj._recvloop()
+        obj._recv()
 
-        sock.recv.assert_has_calls([
-            mocker.call(),
-            mocker.call(),
-            mocker.call(),
-            mocker.call(),
-            mocker.call(),
-        ])
-        assert sock.recv.call_count == 5
-        mock_display.assert_has_calls([
-            mocker.call('ERROR: Failed to send: %r' % 'unsendable'),
-            mocker.call('S: %r' % 'message 1'),
-            mocker.call('S: %r' % 'message 2'),
-            mocker.call('Connection closed'),
-        ])
-        assert mock_display.call_count == 4
-        obj._cli.invalidate.assert_has_calls([
-            mocker.call(),
-            mocker.call(),
-            mocker.call(),
-            mocker.call(),
-        ])
-        assert obj._cli.invalidate.call_count == 4
+        mock_recv.assert_called_once_with('sock')
+        mock_close.assert_called_once_with()
+        assert not mock_display.called
+        mock_cli.invalidate.assert_called_once_with()
+
+    def test_recv_msg(self, mocker):
+        mock_recv = mocker.patch.object(
+            apploop.message.Message, 'recv', return_value='message'
+        )
+        mock_close = mocker.patch.object(apploop.ApplicationLoop, '_close')
+        mock_display = mocker.patch.object(apploop.ApplicationLoop, 'display')
+        mock_cli = mocker.patch.object(apploop.ApplicationLoop, 'cli')
+        obj = apploop.ApplicationLoop('sock')
+
+        obj._recv()
+
+        mock_recv.assert_called_once_with('sock')
+        assert not mock_close.called
+        mock_display.assert_called_once_with('S: %r' % 'message')
+        mock_cli.invalidate.assert_called_once_with()
 
     def test_display(self, mocker):
-        mocker.patch.object(apploop.threading, 'Lock')
         mocker.patch.object(apploop.buffer, 'Buffer')
         obj = apploop.ApplicationLoop('sock')
 
         obj.display('text')
 
-        obj.display_buf_lock.__enter__.assert_called_once_with()
         obj.display_buf.insert_text.assert_called_once_with('text\n')
-        obj.display_buf_lock.__exit__.assert_called_once_with(None, None, None)
 
     def test_execute_no_text(self, mocker):
         mocker.patch.dict(apploop.ApplicationLoop._commands, clear=True)
@@ -188,18 +357,81 @@ class TestApplicationLoop(object):
         assert not mock_display.called
         command.assert_called_once_with(obj, ['is', 'a test'])
 
-    def test_quit(self, mocker):
-        mocker.patch.object(apploop.qsock, 'QueuedSocket')
+    def test_exit(self, mocker):
+        mock_close = mocker.patch.object(apploop.ApplicationLoop, '_close')
         mock_cli = mocker.patch.object(apploop.ApplicationLoop, 'cli')
         obj = apploop.ApplicationLoop('sock')
 
-        obj.quit('args')
+        obj.exit('args')
 
-        obj.sock.exit.assert_called_once_with()
+        mock_close.assert_called_once_with()
         mock_cli.set_return_value.assert_called_once_with(None)
 
+    def test_close(self, mocker):
+        mock_close = mocker.patch.object(apploop.ApplicationLoop, '_close')
+        obj = apploop.ApplicationLoop('sock')
+
+        obj.close('args')
+
+        mock_close.assert_called_once_with()
+
+    def test_connect_too_few_args(self, mocker):
+        mock_display = mocker.patch.object(apploop.ApplicationLoop, 'display')
+        mock_connect = mocker.patch.object(apploop, 'connect')
+        mock_setsock = mocker.patch.object(apploop.ApplicationLoop, 'setsock')
+        obj = apploop.ApplicationLoop('sock')
+
+        obj.connect([])
+
+        mock_display.assert_called_once_with(
+            'ERROR: too few arguments for connect'
+        )
+        assert not mock_connect.called
+        assert not mock_setsock.called
+
+    def test_connect_too_many_args(self, mocker):
+        mock_display = mocker.patch.object(apploop.ApplicationLoop, 'display')
+        mock_connect = mocker.patch.object(apploop, 'connect')
+        mock_setsock = mocker.patch.object(apploop.ApplicationLoop, 'setsock')
+        obj = apploop.ApplicationLoop('sock')
+
+        obj.connect(['host', 'host2'])
+
+        mock_display.assert_called_once_with(
+            'ERROR: too many arguments for connect'
+        )
+        assert not mock_connect.called
+        assert not mock_setsock.called
+
+    def test_connect_failed(self, mocker):
+        mock_display = mocker.patch.object(apploop.ApplicationLoop, 'display')
+        mock_connect = mocker.patch.object(
+            apploop, 'connect', side_effect=ExceptionForTest('failure')
+        )
+        mock_setsock = mocker.patch.object(apploop.ApplicationLoop, 'setsock')
+        obj = apploop.ApplicationLoop('sock')
+
+        obj.connect(['host'])
+
+        mock_display.assert_called_once_with(
+            'ERROR: Unable to connect to host: failure'
+        )
+        mock_connect.assert_called_once_with('host')
+        assert not mock_setsock.called
+
+    def test_connect_connected(self, mocker):
+        mock_display = mocker.patch.object(apploop.ApplicationLoop, 'display')
+        mock_connect = mocker.patch.object(apploop, 'connect')
+        mock_setsock = mocker.patch.object(apploop.ApplicationLoop, 'setsock')
+        obj = apploop.ApplicationLoop('sock')
+
+        obj.connect(['host'])
+
+        mock_display.assert_called_once_with('Connected to host')
+        mock_connect.assert_called_once_with('host')
+        mock_setsock.assert_called_once_with(mock_connect.return_value)
+
     def test_send_failure(self, mocker):
-        mocker.patch.object(apploop.qsock, 'QueuedSocket')
         mock_interpret = mocker.patch.object(
             apploop.message.Message, 'interpret',
             side_effect=message.CommandError('some problem'),
@@ -213,10 +445,22 @@ class TestApplicationLoop(object):
         mock_display.assert_called_once_with(
             'ERROR: Failed to understand message to send: some problem'
         )
-        assert not obj.sock.send.called
+
+    def test_send_closed(self, mocker):
+        msg = mocker.Mock(__repr__=mocker.Mock(return_value='"a message"'))
+        mock_interpret = mocker.patch.object(
+            apploop.message.Message, 'interpret', return_value=msg
+        )
+        mock_display = mocker.patch.object(apploop.ApplicationLoop, 'display')
+        obj = apploop.ApplicationLoop(None)
+
+        obj.send(['some', 'arguments'])
+
+        mock_interpret.assert_called_once_with(['some', 'arguments'])
+        mock_display.assert_called_once_with('ERROR: Connection is closed')
+        assert not msg.send.called
 
     def test_send_sent(self, mocker):
-        mocker.patch.object(apploop.qsock, 'QueuedSocket')
         msg = mocker.Mock(__repr__=mocker.Mock(return_value='"a message"'))
         mock_interpret = mocker.patch.object(
             apploop.message.Message, 'interpret', return_value=msg
@@ -227,24 +471,53 @@ class TestApplicationLoop(object):
         obj.send(['some', 'arguments'])
 
         mock_interpret.assert_called_once_with(['some', 'arguments'])
-        obj.sock.send.assert_called_once_with(msg)
+        msg.send.assert_called_once_with('sock')
         mock_display.assert_called_once_with('C: "a message"')
 
-    def test_run(self, mocker):
-        mocker.patch.object(apploop.qsock, 'QueuedSocket')
-        receiver = mocker.Mock(daemon=False)
-        mock_Thread = mocker.patch.object(
-            apploop.threading, 'Thread', return_value=receiver
+    def test_setsock_closed(self, mocker):
+        mock_close = mocker.patch.object(apploop.ApplicationLoop, '_close')
+        mock_cli = mocker.patch.object(apploop.ApplicationLoop, 'cli')
+        obj = apploop.ApplicationLoop(None)
+
+        obj.setsock('newsock')
+
+        assert obj.sock == 'newsock'
+        assert not mock_close.called
+        mock_cli.eventloop.add_reader.assert_called_once_with(
+            'newsock', obj._recv
         )
+
+    def test_setsock_open(self, mocker):
+        mock_close = mocker.patch.object(apploop.ApplicationLoop, '_close')
+        mock_cli = mocker.patch.object(apploop.ApplicationLoop, 'cli')
+        obj = apploop.ApplicationLoop('sock')
+
+        obj.setsock('newsock')
+
+        assert obj.sock == 'newsock'
+        mock_close.assert_called_once_with()
+        mock_cli.eventloop.add_reader.assert_called_once_with(
+            'newsock', obj._recv
+        )
+
+    def test_run_no_sock(self, mocker):
+        mock_cli = mocker.patch.object(apploop.ApplicationLoop, 'cli')
+        obj = apploop.ApplicationLoop(None)
+
+        obj.run()
+
+        assert not mock_cli.eventloop.add_reader.called
+        mock_cli.run.assert_called_once_with()
+
+    def test_run_with_sock(self, mocker):
         mock_cli = mocker.patch.object(apploop.ApplicationLoop, 'cli')
         obj = apploop.ApplicationLoop('sock')
 
         obj.run()
 
-        obj.sock.start.assert_called_once_with()
-        mock_Thread.assert_called_once_with(target=obj._recvloop)
-        assert receiver.daemon is True
-        receiver.start.assert_called_once_with()
+        mock_cli.eventloop.add_reader.assert_called_once_with(
+            'sock', obj._recv
+        )
         mock_cli.run.assert_called_once_with()
 
     def test_cli_uncached(self, mocker):

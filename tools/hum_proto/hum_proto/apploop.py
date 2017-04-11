@@ -13,7 +13,8 @@
 # permissions and limitations under the License.
 
 import shlex
-import threading
+import socket
+import sys
 
 from prompt_toolkit import application
 from prompt_toolkit import buffer
@@ -25,10 +26,53 @@ from prompt_toolkit import shortcuts
 import six
 
 from hum_proto import message
-from hum_proto import qsock
 
 
-def command(func_or_name=None):
+def connect(address):
+    """
+    Create a connection to a specified address.  The address may be a
+    local path, or it may be a host name, an IPv4 address, or an IPv6
+    address (optionally surrounded by square brackets).  A port may be
+    specified by separating it from the host name or address with a
+    colon.  If a port is not specified, it defaults to "7300".
+
+    :param str address: The address to connect to.
+
+    :returns: A connected socket.
+    """
+
+    # Is it a path?
+    if '/' in address:
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM, 0)
+        sock.connect(address)
+        return sock
+
+    # OK, it must be a host and port
+    host, sep, port = address.rpartition(':')
+    if not sep or not port.isdigit():
+        host = address
+        port = 7300
+    if host.startswith('[') and host.endswith(']'):
+        host = host[1:-1]
+
+    # Connect to the host
+    lasterr = None
+    for family, socktype, proto, _canonname, sockaddr in socket.getaddrinfo(
+            host, port, socket.AF_UNSPEC, socket.SOCK_STREAM
+    ):
+        try:
+            sock = socket.socket(family, socktype, proto)
+            sock.connect(sockaddr)
+            return sock
+        except Exception:
+            # Failed; save the last error
+            lasterr = sys.exc_info()
+
+    # Failed to connect to a host
+    six.reraise(*lasterr)
+
+
+def command(func_or_name=None, aliases=None):
     """
     A decorator for marking ``ApplicationLoop`` methods that implement
     particular commands.  For instance, ``@command('spam')`` will mark
@@ -37,6 +81,7 @@ def command(func_or_name=None):
     command.
 
     :param func_or_name: A callable or a command name.
+    :param list aliases: A list of aliases for the command.
 
     :returns: If ``func_or_name`` is a callable, sets the
               ``_command_name`` attribute to the callable name, then
@@ -47,6 +92,7 @@ def command(func_or_name=None):
     # The actual decorator
     def decorator(func):
         func._command_name = name or func.__name__
+        func._command_aliases = aliases or []
         return func
 
     # If it was a callable, use the function name
@@ -85,6 +131,10 @@ class ApplicationLoopMeta(type):
                 # We have a command!
                 commands[val._command_name] = val
 
+                # Also set up its aliases
+                for alias in val._command_aliases:
+                    commands[alias] = val
+
         # Save the commands
         cls._commands = commands
 
@@ -103,48 +153,54 @@ class ApplicationLoop(object):
         :type sock: ``socket.socket``
         """
 
-        # Initialize a queue socket
-        self.sock = qsock.QueuedSocket(sock)
+        # Save the socket
+        self.sock = sock
 
         # The command line interface
         self._cli = None
 
         # Initialize the display buffer
         self.display_buf = buffer.Buffer()
-        self.display_buf_lock = threading.Lock()
 
         # Initialize the command buffer
         self.command_buf = buffer.Buffer(
             accept_action=buffer.AcceptAction(self.execute),
         )
 
-    def _recvloop(self):
+    def _close(self):
         """
-        Receive messages from a Humboldt instance.  This acts in a loop,
-        reading messages and displaying them until the connection is
-        closed.
+        Close the socket.
         """
 
-        while True:
-            # Read a message
-            msg = self.sock.recv()
+        # Is it closed already?
+        if self.sock is None:
+            return
 
-            if msg is None:
-                # Closed the connection
-                self.display('Connection closed')
-            elif isinstance(msg, qsock.Unsendable):
-                # Couldn't send a message; report it
-                self.display('ERROR: Failed to send: %r' % msg.msg)
-            elif isinstance(msg, qsock.Exit):
-                # Instructed to exit from the loop
-                break
-            else:
-                # Display the message details
-                self.display('S: %r' % msg)
+        # Display a message to alert the user to the closed connection
+        self.display('Connection closed')
 
-            # Make sure we redraw to display the message
-            if self._cli:
-                self._cli.invalidate()
+        # Close it
+        self.cli.eventloop.remove_reader(self.sock)
+        self.sock.close()
+        self.sock = None
+
+    def _recv(self):
+        """
+        Receive a message from the socket.
+        """
+
+        # Read a message
+        msg = message.Message.recv(self.sock)
+
+        if msg is None:
+            # Close the connection
+            self._close()
+        else:
+            # Display the message
+            self.display('S: %r' % msg)
+
+        # Make sure we redraw to display the message
+        self.cli.invalidate()
 
     def display(self, text):
         """
@@ -153,9 +209,8 @@ class ApplicationLoop(object):
         :param str text: The text to display.
         """
 
-        # Could be called from 2 threads
-        with self.display_buf_lock:
-            self.display_buf.insert_text('%s\n' % text)
+        # Display the text
+        self.display_buf.insert_text('%s\n' % text)
 
     def execute(self, cli, doc):
         """
@@ -184,19 +239,60 @@ class ApplicationLoop(object):
         else:
             self._commands[cmd[0]](self, cmd[1:])
 
-    @command
-    def quit(self, args):
+    @command(aliases=['quit'])
+    def exit(self, args):
         """
         Exits the interpreter.  Arguments are ignored.
 
         :param list args: The list of arguments to the command.
         """
 
-        # Signal the daemon threads to exit
-        self.sock.exit()
+        # Close the connection
+        self._close()
 
         # Signal the interface to exit
         self.cli.set_return_value(None)
+
+    @command
+    def close(self, args):
+        """
+        Close the connection.  Arguments are ignored.
+
+        :param list args: The list of arguments to the command.
+        """
+
+        # Close the connection
+        self._close()
+
+    @command
+    def connect(self, args):
+        """
+        Connect to the specified Humboldt endpoint.
+
+        :param list args: The list of arguments to the command.
+        """
+
+        # Make sure we have an address
+        if len(args) != 1:
+            self.display(
+                'ERROR: too %s arguments for connect' %
+                ('many' if len(args) > 1 else 'few')
+            )
+            return
+
+        # Make the new connection
+        try:
+            new_sock = connect(args[0])
+        except Exception as err:
+            # Hmmm, couldn't connect?
+            self.display(
+                'ERROR: Unable to connect to %s: %s' % (args[0], err)
+            )
+            return
+
+        # Set up the new socket
+        self.setsock(new_sock)
+        self.display('Connected to %s' % args[0])
 
     @command
     def send(self, args):
@@ -217,24 +313,39 @@ class ApplicationLoop(object):
             return
 
         # Send the message
-        self.sock.send(msg)
+        if self.sock is None:
+            self.display('ERROR: Connection is closed')
+            return
+        msg.send(self.sock)
 
         # Display what we sent
         self.display('C: %r' % msg)
 
+    def setsock(self, newsock):
+        """
+        Set up a new socket to monitor.
+
+        :param newsock: The new socket to monitor.
+        :type newsock: ``socket.socket``
+        """
+
+        # Make sure the current socket is closed
+        if self.sock:
+            self._close()
+
+        # Save the new socket and set it up for monitoring
+        self.sock = newsock
+        self.cli.eventloop.add_reader(self.sock, self._recv)
+
     def run(self):
         """
-        Run the application loop.  This starts the receiver thread as a
-        daemon thread and starts up the ``prompt_toolkit``-based UI.
+        Run the application loop.  This starts listening to the socket and
+        starts up the ``prompt_toolkit``-based UI.
         """
 
-        # Start the socket running
-        self.sock.start()
-
-        # Spawn the receiver thread
-        receiver = threading.Thread(target=self._recvloop)
-        receiver.daemon = True
-        receiver.start()
+        # Listen to the socket
+        if self.sock:
+            self.cli.eventloop.add_reader(self.sock, self._recv)
 
         # Start the ui
         self.cli.run()
