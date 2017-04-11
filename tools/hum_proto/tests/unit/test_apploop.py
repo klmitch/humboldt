@@ -1,8 +1,8 @@
 from prompt_toolkit import buffer
 
 from hum_proto import apploop
-from hum_proto import lock_utils
 from hum_proto import message
+from hum_proto import qsock
 
 
 class TestCommand(object):
@@ -47,12 +47,12 @@ class TestApplicationLoopMeta(object):
 
 class TestApplicationLoop(object):
     def test_init(self, mocker):
+        mock_QueuedSocket = mocker.patch.object(apploop.qsock, 'QueuedSocket')
         mock_Lock = mocker.patch.object(apploop.threading, 'Lock')
 
         result = apploop.ApplicationLoop('sock')
 
-        assert result.sock == 'sock'
-        assert isinstance(result.sock_lock, lock_utils.RWLock)
+        assert result.sock == mock_QueuedSocket.return_value
         assert result._cli is None
         assert isinstance(result.display_buf, buffer.Buffer)
         assert result.display_buf_lock == mock_Lock.return_value
@@ -61,50 +61,81 @@ class TestApplicationLoop(object):
             result.command_buf.accept_action, buffer.AcceptAction
         )
         assert result.command_buf.accept_action.handler == result.execute
+        mock_QueuedSocket.assert_called_once_with('sock')
 
-    def test_recvloop(self, mocker):
-        mocker.patch.object(apploop.lock_utils, 'RWLock')
-        mock_recv = mocker.patch.object(
-            apploop.message.Message, 'recv', side_effect=[
+    def test_recvloop_nocli(self, mocker):
+        sock = mocker.Mock(**{
+            'recv.side_effect': [
+                qsock.Unsendable('unsendable'),
                 'message 1',
                 'message 2',
                 None,
+                qsock.Exit(),
+                'message 3',
             ],
-        )
+        })
+        mocker.patch.object(apploop.qsock, 'QueuedSocket', return_value=sock)
         mock_display = mocker.patch.object(apploop.ApplicationLoop, 'display')
-        sock = mocker.Mock()
         obj = apploop.ApplicationLoop(sock)
 
         obj._recvloop()
 
-        assert obj.sock is None
-        obj.sock_lock.read.__enter__.assert_has_calls([
+        sock.recv.assert_has_calls([
+            mocker.call(),
+            mocker.call(),
             mocker.call(),
             mocker.call(),
             mocker.call(),
         ])
-        assert obj.sock_lock.read.__enter__.call_count == 3
-        mock_recv.assert_has_calls([
-            mocker.call(sock),
-            mocker.call(sock),
-            mocker.call(sock),
-        ])
-        assert mock_recv.call_count == 3
-        obj.sock_lock.read.__exit__.assert_has_calls([
-            mocker.call(None, None, None),
-            mocker.call(None, None, None),
-            mocker.call(None, None, None),
-        ])
-        assert obj.sock_lock.read.__exit__.call_count == 3
+        assert sock.recv.call_count == 5
         mock_display.assert_has_calls([
-            mocker.call("S: 'message 1'"),
-            mocker.call("S: 'message 2'"),
-            mocker.call("Connection closed"),
+            mocker.call('ERROR: Failed to send: %r' % 'unsendable'),
+            mocker.call('S: %r' % 'message 1'),
+            mocker.call('S: %r' % 'message 2'),
+            mocker.call('Connection closed'),
         ])
-        assert mock_display.call_count == 3
-        obj.sock_lock.write.__enter__.assert_called_once_with()
-        sock.close.assert_called_once_with()
-        obj.sock_lock.write.__exit__.assert_called_once_with(None, None, None)
+        assert mock_display.call_count == 4
+
+    def test_recvloop_withcli(self, mocker):
+        sock = mocker.Mock(**{
+            'recv.side_effect': [
+                qsock.Unsendable('unsendable'),
+                'message 1',
+                'message 2',
+                None,
+                qsock.Exit(),
+                'message 3',
+            ],
+        })
+        mocker.patch.object(apploop.qsock, 'QueuedSocket', return_value=sock)
+        mock_display = mocker.patch.object(apploop.ApplicationLoop, 'display')
+        obj = apploop.ApplicationLoop(sock)
+        obj._cli = mocker.Mock()
+
+        obj._recvloop()
+
+        sock.recv.assert_has_calls([
+            mocker.call(),
+            mocker.call(),
+            mocker.call(),
+            mocker.call(),
+            mocker.call(),
+        ])
+        assert sock.recv.call_count == 5
+        mock_display.assert_has_calls([
+            mocker.call('ERROR: Failed to send: %r' % 'unsendable'),
+            mocker.call('S: %r' % 'message 1'),
+            mocker.call('S: %r' % 'message 2'),
+            mocker.call('Connection closed'),
+        ])
+        assert mock_display.call_count == 4
+        obj._cli.invalidate.assert_has_calls([
+            mocker.call(),
+            mocker.call(),
+            mocker.call(),
+            mocker.call(),
+        ])
+        assert obj._cli.invalidate.call_count == 4
 
     def test_display(self, mocker):
         mocker.patch.object(apploop.threading, 'Lock')
@@ -158,15 +189,17 @@ class TestApplicationLoop(object):
         command.assert_called_once_with(obj, ['is', 'a test'])
 
     def test_quit(self, mocker):
+        mocker.patch.object(apploop.qsock, 'QueuedSocket')
         mock_cli = mocker.patch.object(apploop.ApplicationLoop, 'cli')
         obj = apploop.ApplicationLoop('sock')
 
         obj.quit('args')
 
+        obj.sock.exit.assert_called_once_with()
         mock_cli.set_return_value.assert_called_once_with(None)
 
     def test_send_failure(self, mocker):
-        mocker.patch.object(apploop.lock_utils, 'RWLock')
+        mocker.patch.object(apploop.qsock, 'QueuedSocket')
         mock_interpret = mocker.patch.object(
             apploop.message.Message, 'interpret',
             side_effect=message.CommandError('some problem'),
@@ -180,28 +213,10 @@ class TestApplicationLoop(object):
         mock_display.assert_called_once_with(
             'ERROR: Failed to understand message to send: some problem'
         )
-        assert not obj.sock_lock.read.__enter__.called
-        assert not obj.sock_lock.read.__exit__.called
-
-    def test_send_closed(self, mocker):
-        mocker.patch.object(apploop.lock_utils, 'RWLock')
-        msg = mocker.Mock(__repr__=mocker.Mock(return_value='"a message"'))
-        mock_interpret = mocker.patch.object(
-            apploop.message.Message, 'interpret', return_value=msg
-        )
-        mock_display = mocker.patch.object(apploop.ApplicationLoop, 'display')
-        obj = apploop.ApplicationLoop(None)
-
-        obj.send(['some', 'arguments'])
-
-        mock_interpret.assert_called_once_with(['some', 'arguments'])
-        obj.sock_lock.read.__enter__.assert_called_once_with()
-        mock_display.assert_called_once_with('ERROR: Socket has been closed')
-        assert not msg.send.called
-        obj.sock_lock.read.__exit__.assert_called_once_with(None, None, None)
+        assert not obj.sock.send.called
 
     def test_send_sent(self, mocker):
-        mocker.patch.object(apploop.lock_utils, 'RWLock')
+        mocker.patch.object(apploop.qsock, 'QueuedSocket')
         msg = mocker.Mock(__repr__=mocker.Mock(return_value='"a message"'))
         mock_interpret = mocker.patch.object(
             apploop.message.Message, 'interpret', return_value=msg
@@ -212,12 +227,11 @@ class TestApplicationLoop(object):
         obj.send(['some', 'arguments'])
 
         mock_interpret.assert_called_once_with(['some', 'arguments'])
-        obj.sock_lock.read.__enter__.assert_called_once_with()
-        msg.send.assert_called_once_with('sock')
-        obj.sock_lock.read.__exit__.assert_called_once_with(None, None, None)
+        obj.sock.send.assert_called_once_with(msg)
         mock_display.assert_called_once_with('C: "a message"')
 
     def test_run(self, mocker):
+        mocker.patch.object(apploop.qsock, 'QueuedSocket')
         receiver = mocker.Mock(daemon=False)
         mock_Thread = mocker.patch.object(
             apploop.threading, 'Thread', return_value=receiver
@@ -227,6 +241,7 @@ class TestApplicationLoop(object):
 
         obj.run()
 
+        obj.sock.start.assert_called_once_with()
         mock_Thread.assert_called_once_with(target=obj._recvloop)
         assert receiver.daemon is True
         receiver.start.assert_called_once_with()

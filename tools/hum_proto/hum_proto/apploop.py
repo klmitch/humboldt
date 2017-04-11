@@ -24,8 +24,8 @@ from prompt_toolkit.layout import dimension
 from prompt_toolkit import shortcuts
 import six
 
-from hum_proto import lock_utils
 from hum_proto import message
+from hum_proto import qsock
 
 
 def command(func_or_name=None):
@@ -103,9 +103,8 @@ class ApplicationLoop(object):
         :type sock: ``socket.socket``
         """
 
-        # Save the socket and set up the lock
-        self.sock = sock
-        self.sock_lock = lock_utils.RWLock()
+        # Initialize a queue socket
+        self.sock = qsock.QueuedSocket(sock)
 
         # The command line interface
         self._cli = None
@@ -128,19 +127,24 @@ class ApplicationLoop(object):
 
         while True:
             # Read a message
-            with self.sock_lock.read:
-                msg = message.Message.recv(self.sock)
+            msg = self.sock.recv()
 
-            if msg:
+            if msg is None:
+                # Closed the connection
+                self.display('Connection closed')
+            elif isinstance(msg, qsock.Unsendable):
+                # Couldn't send a message; report it
+                self.display('ERROR: Failed to send: %r' % msg.msg)
+            elif isinstance(msg, qsock.Exit):
+                # Instructed to exit from the loop
+                break
+            else:
                 # Display the message details
                 self.display('S: %r' % msg)
-            else:
-                # Oh, closed the connection
-                self.display('Connection closed')
-                with self.sock_lock.write:
-                    self.sock.close()
-                    self.sock = None
-                break
+
+            # Make sure we redraw to display the message
+            if self._cli:
+                self._cli.invalidate()
 
     def display(self, text):
         """
@@ -188,6 +192,10 @@ class ApplicationLoop(object):
         :param list args: The list of arguments to the command.
         """
 
+        # Signal the daemon threads to exit
+        self.sock.exit()
+
+        # Signal the interface to exit
         self.cli.set_return_value(None)
 
     @command
@@ -209,13 +217,7 @@ class ApplicationLoop(object):
             return
 
         # Send the message
-        with self.sock_lock.read:
-            if not self.sock:
-                # Oops, guess it's closed
-                self.display('ERROR: Socket has been closed')
-                return
-
-            msg.send(self.sock)
+        self.sock.send(msg)
 
         # Display what we sent
         self.display('C: %r' % msg)
@@ -225,6 +227,9 @@ class ApplicationLoop(object):
         Run the application loop.  This starts the receiver thread as a
         daemon thread and starts up the ``prompt_toolkit``-based UI.
         """
+
+        # Start the socket running
+        self.sock.start()
 
         # Spawn the receiver thread
         receiver = threading.Thread(target=self._recvloop)
