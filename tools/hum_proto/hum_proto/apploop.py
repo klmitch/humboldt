@@ -345,27 +345,40 @@ class ApplicationLoop(object):
         self.sock = newsock
         self.cli.eventloop.add_reader(self.sock, self._recv)
 
-    def wrap(self, wrapper, msg=None):
+    def wrap(self, wrapper, *args, **kwargs):
         """
         Wrap the socket.
 
-        :param wrapper: A callable of one argument.  This callable
-                        must take a socket object, and must return a
-                        new socket-compatible object that will be used
-                        for subsequent message sending and receiving.
+        :param wrapper: A callable of at least one argument.  This
+                        callable must take a socket object as its
+                        first parameter, and must return a new
+                        socket-compatible object that will be used for
+                        subsequent message sending and receiving.
+        :param *args: Additional positional arguments for the wrapper.
+                      These will be passed after the socket object.
+        :param **kwargs: Additional keyword arguments for the wrapper.
         :param str msg: A message to display to explain the wrapping.
                         If not provided, a generic "socket wrapped"
-                        message will be displayed.
+                        message will be displayed.  This is a
+                        keyword-only argument.
         """
 
         # If the socket is closed, there's nothing we can do
         if not self.sock:
             return
 
+        # Pop the message out of the keyword arguments
+        msg = kwargs.pop('msg', None)
+
         # Wrap our socket
         self.cli.eventloop.remove_reader(self.sock)
-        self.sock = wrapper(self.sock)
-        self.cli.eventloop.add_reader(self.sock, self._recv)
+        try:
+            self.sock = wrapper(self.sock, *args, **kwargs)
+        except Exception as err:
+            self.display('ERROR: Could not wrap socket: %s' % err)
+            return
+        finally:
+            self.cli.eventloop.add_reader(self.sock, self._recv)
 
         # Report the fact
         self.display(msg or 'Socket wrapped')

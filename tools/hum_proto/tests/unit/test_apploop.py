@@ -564,7 +564,7 @@ class TestApplicationLoop(object):
         wrapper = mocker.Mock()
         obj = apploop.ApplicationLoop(None)
 
-        obj.wrap(wrapper)
+        obj.wrap(wrapper, 1, 2, c=3, d=4)
 
         assert obj.sock is None
         assert not mock_cli.eventloop.remove_reader.called
@@ -578,15 +578,33 @@ class TestApplicationLoop(object):
         wrapper = mocker.Mock()
         obj = apploop.ApplicationLoop('sock')
 
-        obj.wrap(wrapper)
+        obj.wrap(wrapper, 1, 2, c=3, d=4)
 
         assert obj.sock == wrapper.return_value
         mock_cli.eventloop.remove_reader.assert_called_once_with('sock')
-        wrapper.assert_called_once_with('sock')
+        wrapper.assert_called_once_with('sock', 1, 2, c=3, d=4)
         mock_cli.eventloop.add_reader.assert_called_once_with(
             wrapper.return_value, obj._recv
         )
         mock_display.assert_called_once_with('Socket wrapped')
+
+    def test_wrap_error(self, mocker):
+        mock_cli = mocker.patch.object(apploop.ApplicationLoop, 'cli')
+        mock_display = mocker.patch.object(apploop.ApplicationLoop, 'display')
+        wrapper = mocker.Mock(side_effect=ExceptionForTest('some error'))
+        obj = apploop.ApplicationLoop('sock')
+
+        obj.wrap(wrapper, 1, 2, c=3, d=4)
+
+        assert obj.sock == 'sock'
+        mock_cli.eventloop.remove_reader.assert_called_once_with('sock')
+        wrapper.assert_called_once_with('sock', 1, 2, c=3, d=4)
+        mock_cli.eventloop.add_reader.assert_called_once_with(
+            'sock', obj._recv
+        )
+        mock_display.assert_called_once_with(
+            'ERROR: Could not wrap socket: some error'
+        )
 
     def test_wrap_open_message(self, mocker):
         mock_cli = mocker.patch.object(apploop.ApplicationLoop, 'cli')
@@ -594,11 +612,11 @@ class TestApplicationLoop(object):
         wrapper = mocker.Mock()
         obj = apploop.ApplicationLoop('sock')
 
-        obj.wrap(wrapper, 'message')
+        obj.wrap(wrapper, 1, 2, c=3, d=4, msg='message')
 
         assert obj.sock == wrapper.return_value
         mock_cli.eventloop.remove_reader.assert_called_once_with('sock')
-        wrapper.assert_called_once_with('sock')
+        wrapper.assert_called_once_with('sock', 1, 2, c=3, d=4)
         mock_cli.eventloop.add_reader.assert_called_once_with(
             wrapper.return_value, obj._recv
         )
