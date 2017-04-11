@@ -60,13 +60,14 @@ def main(endpoint, certfile, keyfile):
     """
 
     # Initialize an SSL context
-    sslctx = ssl_utils.get_ctx(certfile, keyfile)
+    sslctx_cli = ssl_utils.get_ctx(certfile, keyfile)
+    sslctx_srv = ssl_utils.get_ctx(certfile, keyfile, False)
 
     # Connect to the specified endpoint
     sock = apploop.connect(endpoint) if endpoint else None
 
     # Now, initialize the application loop and run it
-    app = apploop.ApplicationLoop(sock, sslctx)
+    app = apploop.ApplicationLoop(sock, sslctx_cli, sslctx_srv)
     app.run()
 
     # Close the socket

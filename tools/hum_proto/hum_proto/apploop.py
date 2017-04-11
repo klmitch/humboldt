@@ -161,19 +161,24 @@ class ApplicationLoop(object):
     Core application loop for the Humboldt Protocol Analyzer.
     """
 
-    def __init__(self, sock, sslctx):
+    def __init__(self, sock, sslctx_cli, sslctx_srv):
         """
         Initialize an ``ApplicationLoop`` instance.
 
         :param sock: A connected socket.
         :type sock: ``socket.socket``
-        :param sslctx: An SSL context to use for SSL support.
-        :type sslctx: ``hum_proto.ssl_utils.SSLContext``
+        :param sslctx_cli: An SSL context to use for client-side SSL
+                           support.
+        :type sslctx_cli: ``hum_proto.ssl_utils.SSLContext``
+        :param sslctx_srv: An SSL context to use for server-side SSL
+                           support.
+        :type sslctx_srv: ``hum_proto.ssl_utils.SSLContext``
         """
 
         # Save the socket and SSL context
         self.sock = sock
-        self.sslctx = sslctx
+        self.sslctx_cli = sslctx_cli
+        self.sslctx_srv = sslctx_srv
 
         # The command line interface
         self._cli = None

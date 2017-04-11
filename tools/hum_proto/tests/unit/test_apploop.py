@@ -252,10 +252,11 @@ class TestApplicationLoopMeta(object):
 
 class TestApplicationLoop(object):
     def test_init(self, mocker):
-        result = apploop.ApplicationLoop('sock', 'ctx')
+        result = apploop.ApplicationLoop('sock', 'cli', 'srv')
 
         assert result.sock == 'sock'
-        assert result.sslctx == 'ctx'
+        assert result.sslctx_cli == 'cli'
+        assert result.sslctx_srv == 'srv'
         assert result._cli is None
         assert isinstance(result.display_buf, buffer.Buffer)
         assert isinstance(result.command_buf, buffer.Buffer)
@@ -267,7 +268,7 @@ class TestApplicationLoop(object):
     def test_close_internal_closed(self, mocker):
         mock_display = mocker.patch.object(apploop.ApplicationLoop, 'display')
         mock_cli = mocker.patch.object(apploop.ApplicationLoop, 'cli')
-        obj = apploop.ApplicationLoop(None, 'sslctx')
+        obj = apploop.ApplicationLoop(None, 'cli', 'srv')
 
         obj._close()
 
@@ -278,7 +279,7 @@ class TestApplicationLoop(object):
         mock_display = mocker.patch.object(apploop.ApplicationLoop, 'display')
         mock_cli = mocker.patch.object(apploop.ApplicationLoop, 'cli')
         sock = mocker.Mock()
-        obj = apploop.ApplicationLoop(sock, 'sslctx')
+        obj = apploop.ApplicationLoop(sock, 'cli', 'srv')
 
         obj._close()
 
@@ -294,7 +295,7 @@ class TestApplicationLoop(object):
         mock_close = mocker.patch.object(apploop.ApplicationLoop, '_close')
         mock_display = mocker.patch.object(apploop.ApplicationLoop, 'display')
         mock_cli = mocker.patch.object(apploop.ApplicationLoop, 'cli')
-        obj = apploop.ApplicationLoop('sock', 'sslctx')
+        obj = apploop.ApplicationLoop('sock', 'cli', 'srv')
 
         obj._recv()
 
@@ -314,7 +315,7 @@ class TestApplicationLoop(object):
         mock_close = mocker.patch.object(apploop.ApplicationLoop, '_close')
         mock_display = mocker.patch.object(apploop.ApplicationLoop, 'display')
         mock_cli = mocker.patch.object(apploop.ApplicationLoop, 'cli')
-        obj = apploop.ApplicationLoop('sock', 'sslctx')
+        obj = apploop.ApplicationLoop('sock', 'cli', 'srv')
 
         obj._recv()
 
@@ -331,7 +332,7 @@ class TestApplicationLoop(object):
         mock_close = mocker.patch.object(apploop.ApplicationLoop, '_close')
         mock_display = mocker.patch.object(apploop.ApplicationLoop, 'display')
         mock_cli = mocker.patch.object(apploop.ApplicationLoop, 'cli')
-        obj = apploop.ApplicationLoop('sock', 'sslctx')
+        obj = apploop.ApplicationLoop('sock', 'cli', 'srv')
 
         obj._recv()
 
@@ -343,7 +344,7 @@ class TestApplicationLoop(object):
 
     def test_display(self, mocker):
         mocker.patch.object(apploop.buffer, 'Buffer')
-        obj = apploop.ApplicationLoop('sock', 'sslctx')
+        obj = apploop.ApplicationLoop('sock', 'cli', 'srv')
 
         obj.display('text')
 
@@ -354,7 +355,7 @@ class TestApplicationLoop(object):
         mocker.patch.object(apploop.buffer, 'Buffer')
         mock_display = mocker.patch.object(apploop.ApplicationLoop, 'display')
         doc = mocker.Mock(text='')
-        obj = apploop.ApplicationLoop('sock', 'sslctx')
+        obj = apploop.ApplicationLoop('sock', 'cli', 'srv')
 
         obj.execute('cli', doc)
 
@@ -366,7 +367,7 @@ class TestApplicationLoop(object):
         mocker.patch.object(apploop.buffer, 'Buffer')
         mock_display = mocker.patch.object(apploop.ApplicationLoop, 'display')
         doc = mocker.Mock(text='this is "a test"')
-        obj = apploop.ApplicationLoop('sock', 'sslctx')
+        obj = apploop.ApplicationLoop('sock', 'cli', 'srv')
 
         obj.execute('cli', doc)
 
@@ -381,7 +382,7 @@ class TestApplicationLoop(object):
         mocker.patch.object(apploop.buffer, 'Buffer')
         mock_display = mocker.patch.object(apploop.ApplicationLoop, 'display')
         doc = mocker.Mock(text='this is "a test"')
-        obj = apploop.ApplicationLoop('sock', 'sslctx')
+        obj = apploop.ApplicationLoop('sock', 'cli', 'srv')
 
         obj.execute('cli', doc)
 
@@ -392,7 +393,7 @@ class TestApplicationLoop(object):
     def test_exit(self, mocker):
         mock_close = mocker.patch.object(apploop.ApplicationLoop, '_close')
         mock_cli = mocker.patch.object(apploop.ApplicationLoop, 'cli')
-        obj = apploop.ApplicationLoop('sock', 'sslctx')
+        obj = apploop.ApplicationLoop('sock', 'cli', 'srv')
 
         obj.exit('args')
 
@@ -401,7 +402,7 @@ class TestApplicationLoop(object):
 
     def test_close(self, mocker):
         mock_close = mocker.patch.object(apploop.ApplicationLoop, '_close')
-        obj = apploop.ApplicationLoop('sock', 'sslctx')
+        obj = apploop.ApplicationLoop('sock', 'cli', 'srv')
 
         obj.close('args')
 
@@ -411,7 +412,7 @@ class TestApplicationLoop(object):
         mock_display = mocker.patch.object(apploop.ApplicationLoop, 'display')
         mock_connect = mocker.patch.object(apploop, 'connect')
         mock_setsock = mocker.patch.object(apploop.ApplicationLoop, 'setsock')
-        obj = apploop.ApplicationLoop('sock', 'sslctx')
+        obj = apploop.ApplicationLoop('sock', 'cli', 'srv')
 
         obj.connect([])
 
@@ -425,7 +426,7 @@ class TestApplicationLoop(object):
         mock_display = mocker.patch.object(apploop.ApplicationLoop, 'display')
         mock_connect = mocker.patch.object(apploop, 'connect')
         mock_setsock = mocker.patch.object(apploop.ApplicationLoop, 'setsock')
-        obj = apploop.ApplicationLoop('sock', 'sslctx')
+        obj = apploop.ApplicationLoop('sock', 'cli', 'srv')
 
         obj.connect(['host', 'host2'])
 
@@ -441,7 +442,7 @@ class TestApplicationLoop(object):
             apploop, 'connect', side_effect=ExceptionForTest('failure')
         )
         mock_setsock = mocker.patch.object(apploop.ApplicationLoop, 'setsock')
-        obj = apploop.ApplicationLoop('sock', 'sslctx')
+        obj = apploop.ApplicationLoop('sock', 'cli', 'srv')
 
         obj.connect(['host'])
 
@@ -455,7 +456,7 @@ class TestApplicationLoop(object):
         mock_display = mocker.patch.object(apploop.ApplicationLoop, 'display')
         mock_connect = mocker.patch.object(apploop, 'connect')
         mock_setsock = mocker.patch.object(apploop.ApplicationLoop, 'setsock')
-        obj = apploop.ApplicationLoop('sock', 'sslctx')
+        obj = apploop.ApplicationLoop('sock', 'cli', 'srv')
 
         obj.connect(['host'])
 
@@ -469,7 +470,7 @@ class TestApplicationLoop(object):
             side_effect=message.CommandError('some problem'),
         )
         mock_display = mocker.patch.object(apploop.ApplicationLoop, 'display')
-        obj = apploop.ApplicationLoop('sock', 'sslctx')
+        obj = apploop.ApplicationLoop('sock', 'cli', 'srv')
 
         obj.send(['some', 'arguments'])
 
@@ -487,7 +488,7 @@ class TestApplicationLoop(object):
             apploop.message.Message, 'interpret', return_value=msg
         )
         mock_display = mocker.patch.object(apploop.ApplicationLoop, 'display')
-        obj = apploop.ApplicationLoop(None, 'sslctx')
+        obj = apploop.ApplicationLoop(None, 'cli', 'srv')
 
         obj.send(['some', 'arguments'])
 
@@ -501,7 +502,7 @@ class TestApplicationLoop(object):
             apploop.message.Message, 'interpret', return_value=msg
         )
         mock_display = mocker.patch.object(apploop.ApplicationLoop, 'display')
-        obj = apploop.ApplicationLoop(None, 'sslctx')
+        obj = apploop.ApplicationLoop(None, 'cli', 'srv')
 
         obj.send(['some', 'arguments'])
 
@@ -519,7 +520,7 @@ class TestApplicationLoop(object):
             apploop.message.Message, 'interpret', return_value=msg
         )
         mock_display = mocker.patch.object(apploop.ApplicationLoop, 'display')
-        obj = apploop.ApplicationLoop('sock', 'sslctx')
+        obj = apploop.ApplicationLoop('sock', 'cli', 'srv')
 
         obj.send(['some', 'arguments'])
 
@@ -533,7 +534,7 @@ class TestApplicationLoop(object):
             apploop.message.Message, 'interpret', return_value=msg
         )
         mock_display = mocker.patch.object(apploop.ApplicationLoop, 'display')
-        obj = apploop.ApplicationLoop('sock', 'sslctx')
+        obj = apploop.ApplicationLoop('sock', 'cli', 'srv')
 
         obj.send(['some', 'arguments'])
 
@@ -545,7 +546,7 @@ class TestApplicationLoop(object):
     def test_setsock_closed(self, mocker):
         mock_close = mocker.patch.object(apploop.ApplicationLoop, '_close')
         mock_cli = mocker.patch.object(apploop.ApplicationLoop, 'cli')
-        obj = apploop.ApplicationLoop(None, 'sslctx')
+        obj = apploop.ApplicationLoop(None, 'cli', 'srv')
 
         obj.setsock('newsock')
 
@@ -558,7 +559,7 @@ class TestApplicationLoop(object):
     def test_setsock_open(self, mocker):
         mock_close = mocker.patch.object(apploop.ApplicationLoop, '_close')
         mock_cli = mocker.patch.object(apploop.ApplicationLoop, 'cli')
-        obj = apploop.ApplicationLoop('sock', 'sslctx')
+        obj = apploop.ApplicationLoop('sock', 'cli', 'srv')
 
         obj.setsock('newsock')
 
@@ -571,7 +572,7 @@ class TestApplicationLoop(object):
     def test_wrap_closed(self, mocker):
         mock_cli = mocker.patch.object(apploop.ApplicationLoop, 'cli')
         wrapper = mocker.Mock()
-        obj = apploop.ApplicationLoop(None, 'sslctx')
+        obj = apploop.ApplicationLoop(None, 'cli', 'srv')
 
         with pytest.raises(socket.error) as excinfo:
             obj.wrap(wrapper, 1, 2, c=3, d=4)
@@ -584,7 +585,7 @@ class TestApplicationLoop(object):
     def test_wrap_open(self, mocker):
         mock_cli = mocker.patch.object(apploop.ApplicationLoop, 'cli')
         wrapper = mocker.Mock()
-        obj = apploop.ApplicationLoop('sock', 'sslctx')
+        obj = apploop.ApplicationLoop('sock', 'cli', 'srv')
 
         obj.wrap(wrapper, 1, 2, c=3, d=4)
 
@@ -598,7 +599,7 @@ class TestApplicationLoop(object):
     def test_wrap_error(self, mocker):
         mock_cli = mocker.patch.object(apploop.ApplicationLoop, 'cli')
         wrapper = mocker.Mock(side_effect=ExceptionForTest('some error'))
-        obj = apploop.ApplicationLoop('sock', 'sslctx')
+        obj = apploop.ApplicationLoop('sock', 'cli', 'srv')
 
         with pytest.raises(ExceptionForTest):
             obj.wrap(wrapper, 1, 2, c=3, d=4)
@@ -611,7 +612,7 @@ class TestApplicationLoop(object):
 
     def test_run_no_sock(self, mocker):
         mock_cli = mocker.patch.object(apploop.ApplicationLoop, 'cli')
-        obj = apploop.ApplicationLoop(None, 'sslctx')
+        obj = apploop.ApplicationLoop(None, 'cli', 'srv')
 
         obj.run()
 
@@ -620,7 +621,7 @@ class TestApplicationLoop(object):
 
     def test_run_with_sock(self, mocker):
         mock_cli = mocker.patch.object(apploop.ApplicationLoop, 'cli')
-        obj = apploop.ApplicationLoop('sock', 'sslctx')
+        obj = apploop.ApplicationLoop('sock', 'cli', 'srv')
 
         obj.run()
 
@@ -661,7 +662,7 @@ class TestApplicationLoop(object):
         mock_CommandLineInterface = mocker.patch.object(
             apploop.interface, 'CommandLineInterface'
         )
-        obj = apploop.ApplicationLoop('sock', 'sslctx')
+        obj = apploop.ApplicationLoop('sock', 'cli', 'srv')
 
         result = obj.cli
 
@@ -717,7 +718,7 @@ class TestApplicationLoop(object):
         mock_CommandLineInterface = mocker.patch.object(
             apploop.interface, 'CommandLineInterface'
         )
-        obj = apploop.ApplicationLoop('sock', 'sslctx')
+        obj = apploop.ApplicationLoop('sock', 'cli', 'srv')
         obj._cli = 'cached'
 
         result = obj.cli
