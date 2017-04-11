@@ -12,6 +12,8 @@
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
 
+import errno
+import os
 import shlex
 import socket
 import sys
@@ -26,6 +28,20 @@ from prompt_toolkit import shortcuts
 import six
 
 from hum_proto import message
+
+
+def _mksockerr(err):
+    """
+    Construct a ``socket.error`` instance based on a specified socket
+    error number.
+
+    :param int err: A value from ``errno``.
+
+    :returns: The specified socket error.
+    :rtype: ``socket.error``
+    """
+
+    return socket.error(err, os.strerror(err))
 
 
 def connect(address):
@@ -360,31 +376,22 @@ class ApplicationLoop(object):
         :param *args: Additional positional arguments for the wrapper.
                       These will be passed after the socket object.
         :param **kwargs: Additional keyword arguments for the wrapper.
-        :param str msg: A message to display to explain the wrapping.
-                        If not provided, a generic "socket wrapped"
-                        message will be displayed.  This is a
-                        keyword-only argument.
+
+        :raises socket.error:
+            If the socket has been closed, raises a ``socket.error``
+            with the error number ``errno.EBADF``.
         """
 
         # If the socket is closed, there's nothing we can do
         if not self.sock:
-            return
-
-        # Pop the message out of the keyword arguments
-        msg = kwargs.pop('msg', None)
+            raise _mksockerr(errno.EBADF)
 
         # Wrap our socket
         self.cli.eventloop.remove_reader(self.sock)
         try:
             self.sock = wrapper(self.sock, *args, **kwargs)
-        except Exception as err:
-            self.display('ERROR: Could not wrap socket: %s' % err)
-            return
         finally:
             self.cli.eventloop.add_reader(self.sock, self._recv)
-
-        # Report the fact
-        self.display(msg or 'Socket wrapped')
 
     def run(self):
         """
