@@ -43,6 +43,8 @@ typedef void *ssl_ctx_t;
  */
 struct _ssl_conf_s {
   magic_t	sc_magic;	/**< Magic number */
+  const char   *sc_cafile;	/**< File containing certs for verification */
+  const char   *sc_capath;	/**< Dir containing certs for verification */
   const char   *sc_cert_chain;	/**< Certificate chain file */
   const char   *sc_ciphers;	/**< Configured SSL ciphers */
   const char   *sc_private_key;	/**< Private key file (PEM-encoded) */

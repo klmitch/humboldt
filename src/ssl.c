@@ -125,6 +125,42 @@ ssl_process(protocol_buf_t *msg, connection_t *conn)
 #define SESSION_CACHE_ID	"Humboldt"
 
 static void
+proc_cafile(const char *key, ssl_conf_t *conf, yaml_ctx_t *ctx,
+	    yaml_node_t *value)
+{
+  const char *filename;
+
+  common_verify(conf, SSL_CONF_MAGIC);
+
+  /* Convert the value as a string */
+  if (!yaml_get_str(ctx, value, &filename, 0, 0))
+    return;
+
+  /* Copy the filename into the configuration structure */
+  if (!(conf->sc_cafile = strdup(filename)))
+    yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
+		    "Out of memory reading string");
+}
+
+static void
+proc_capath(const char *key, ssl_conf_t *conf, yaml_ctx_t *ctx,
+	    yaml_node_t *value)
+{
+  const char *dirname;
+
+  common_verify(conf, SSL_CONF_MAGIC);
+
+  /* Convert the value as a string */
+  if (!yaml_get_str(ctx, value, &dirname, 0, 0))
+    return;
+
+  /* Copy the filename into the configuration structure */
+  if (!(conf->sc_capath = strdup(dirname)))
+    yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
+		    "Out of memory reading string");
+}
+
+static void
 proc_cert_chain(const char *key, ssl_conf_t *conf, yaml_ctx_t *ctx,
 		yaml_node_t *value)
 {
@@ -179,6 +215,8 @@ proc_private_key(const char *key, ssl_conf_t *conf, yaml_ctx_t *ctx,
 }
 
 static mapkeys_t ssl_options[] = {
+  MAPKEY("cafile", proc_cafile),
+  MAPKEY("capath", proc_capath),
   MAPKEY("cert_chain", proc_cert_chain),
   MAPKEY("ciphers", proc_ciphers),
   MAPKEY("private_key", proc_private_key),
@@ -200,6 +238,8 @@ ssl_conf_processor(const char *key, config_t *conf, yaml_ctx_t *ctx,
   }
 
   /* Initialize it */
+  ssl_conf->sc_cafile = 0;
+  ssl_conf->sc_capath = 0;
   ssl_conf->sc_cert_chain = 0;
   ssl_conf->sc_ciphers = 0;
   ssl_conf->sc_private_key = 0;
@@ -217,6 +257,13 @@ ssl_conf_processor(const char *key, config_t *conf, yaml_ctx_t *ctx,
 		    !ssl_conf->sc_cert_chain && !ssl_conf->sc_private_key ?
 		    " and " : "",
 		    ssl_conf->sc_private_key ? "" : "private_key");
+    ssl_conf_free(ssl_conf);
+    return;
+  } else if (!ssl_conf->sc_cafile && !ssl_conf->sc_capath) {
+    yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
+		    "Not configuring SSL: missing configuration for "
+		    "peer certificate verification; provide either "
+		    "cafile or capath (or both)");
     ssl_conf_free(ssl_conf);
     return;
   }
@@ -311,6 +358,20 @@ ssl_ctx_init(config_t *conf)
 				  SSL_FILETYPE_PEM) != 1) {
     log_errors(conf, "while setting private key file to \"%s\"",
 	       conf->cf_ssl->sc_private_key);
+    log_emit(conf, LOG_WARNING, "Disabling SSL");
+    SSL_CTX_free(ctx);
+    return 0;
+  }
+
+  /* Configure the verification certificates */
+  if (SSL_CTX_load_verify_locations(ctx, conf->cf_ssl->sc_cafile,
+				    conf->cf_ssl->sc_capath) != 1) {
+    log_errors(conf, "while loading peer verification certificates from "
+	       "\"%s%s%s\"",
+	       conf->cf_ssl->sc_cafile ? conf->cf_ssl->sc_cafile : "",
+	       conf->cf_ssl->sc_cafile && conf->cf_ssl->sc_capath ?
+	       "\" and \"" : "",
+	       conf->cf_ssl->sc_capath ? conf->cf_ssl->sc_capath : "");
     log_emit(conf, LOG_WARNING, "Disabling SSL");
     SSL_CTX_free(ctx);
     return 0;

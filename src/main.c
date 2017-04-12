@@ -104,6 +104,12 @@ main(int argc, char **argv)
     log_emit(&conf, LOG_DEBUG, "SSL not configured");
   else {
     log_emit(&conf, LOG_DEBUG, "SSL configured:");
+    if (conf.cf_ssl->sc_cafile)
+      log_emit(&conf, LOG_DEBUG, "  Certificate CA file: %s",
+	       conf.cf_ssl->sc_cafile);
+    if (conf.cf_ssl->sc_capath)
+      log_emit(&conf, LOG_DEBUG, "  Certificate CA path: %s",
+	       conf.cf_ssl->sc_capath);
     if (conf.cf_ssl->sc_cert_chain)
       log_emit(&conf, LOG_DEBUG, "  Certificate chain file: %s",
 	       conf.cf_ssl->sc_cert_chain);
