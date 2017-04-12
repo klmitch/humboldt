@@ -410,7 +410,7 @@ void ep_addr_default(ep_addr_t *dest, ep_addr_t *src);
  * \param[in,out]	buf	The buffer to place the address into.
  * \param[in]		buflen	The size of the buffer.
  *
- * \return	A pointer to \p addr, for convenience.
+ * \return	A pointer to \p buf, for convenience.
  */
 const char *ep_addr_describe(ep_addr_t *addr, char *buf, size_t buflen);
 

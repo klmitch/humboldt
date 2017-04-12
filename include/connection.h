@@ -164,6 +164,23 @@ struct _connection_s {
 connection_t *connection_create(runtime_t *runtime, endpoint_t *endpoint,
 				evutil_socket_t sock, ep_addr_t *addr);
 
+/** \brief Describe a connection.
+ *
+ * Fills a buffer with a description of the connection.  This will be
+ * the address of the remote end of the connection, but for local
+ * sockets this could be an empty string; to further refine the
+ * connection information, so it can be traced in the log files, we
+ * also include the socket.
+ *
+ * \param[in]		conn	The connection to describe.
+ * \param[in,out]	buf	The buffer to place the description
+ *				into.
+ * \param[in]		buflen	The size of the buffer.
+ *
+ * \return	A pointer to \p buf, for convenience.
+ */
+const char *connection_describe(connection_t *conn, char *buf, size_t buflen);
+
 /** \brief Install a bufferevent.
  *
  * This function is used to install a bufferevent on a connection.  It

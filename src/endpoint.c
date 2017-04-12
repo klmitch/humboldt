@@ -20,12 +20,15 @@
 #include <errno.h>
 #include <event2/listener.h>
 #include <event2/util.h>
-#include <inttypes.h>
 #include <stdint.h>
 #include <string.h>
 #include <syslog.h>
 #include <sys/un.h>
 #include <unistd.h>
+
+#ifdef WIN32
+#include <inttypes.h>	/* Needed for PRIdPTR */
+#endif
 
 #include "include/alloc.h"
 #include "include/common.h"
@@ -415,7 +418,11 @@ _endpoint_listener(struct evconnlistener *listener, evutil_socket_t sock,
   ep_addr_describe(&cliaddr, address, sizeof(address));
 
   log_emit(endpoint->ep_runtime->rt_config, LOG_INFO,
+#ifdef WIN32
 	   "Connection from %s at %s (id %" PRIdPTR ") on endpoint %s%s",
+#else
+	   "Connection from %s at %s (id %d) on endpoint %s%s",
+#endif
 	   type, address, sock, ep_addr, configured);
 
   /* Create the connection; responsibility for sock passes here */
