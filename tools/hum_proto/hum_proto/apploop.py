@@ -346,12 +346,12 @@ class ApplicationLoop(object):
             return
         msg.send(self.sock)
 
+        # Display what we sent
+        self.display('C: %r' % msg)
+
         # If there's an action, invoke it
         if msg.action:
             msg.action(self)
-
-        # Display what we sent
-        self.display('C: %r' % msg)
 
     def setsock(self, newsock):
         """
