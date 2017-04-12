@@ -13,11 +13,11 @@ class TestMain(object):
         )
         app = mock_ApplicationLoop.return_value
 
-        main.main('endpoint', 'certfile', 'keyfile')
+        main.main('endpoint', 'certfile', 'keyfile', 'cafile')
 
         mock_get_ctx.assert_has_calls([
-            mocker.call('certfile', 'keyfile'),
-            mocker.call('certfile', 'keyfile', False),
+            mocker.call('certfile', 'keyfile', 'cafile'),
+            mocker.call('certfile', 'keyfile', 'cafile', False),
         ])
         assert mock_get_ctx.call_count == 2
         mock_connect.assert_called_once_with('endpoint')
@@ -35,11 +35,11 @@ class TestMain(object):
         )
         app = mock_ApplicationLoop.return_value
 
-        main.main(None, 'certfile', 'keyfile')
+        main.main(None, 'certfile', 'keyfile', 'cafile')
 
         mock_get_ctx.assert_has_calls([
-            mocker.call('certfile', 'keyfile'),
-            mocker.call('certfile', 'keyfile', False),
+            mocker.call('certfile', 'keyfile', 'cafile'),
+            mocker.call('certfile', 'keyfile', 'cafile', False),
         ])
         assert mock_get_ctx.call_count == 2
         assert not mock_connect.called
@@ -59,11 +59,11 @@ class TestMain(object):
         app = mock_ApplicationLoop.return_value
         app.sock = None
 
-        main.main('endpoint', 'certfile', 'keyfile')
+        main.main('endpoint', 'certfile', 'keyfile', 'cafile')
 
         mock_get_ctx.assert_has_calls([
-            mocker.call('certfile', 'keyfile'),
-            mocker.call('certfile', 'keyfile', False),
+            mocker.call('certfile', 'keyfile', 'cafile'),
+            mocker.call('certfile', 'keyfile', 'cafile', False),
         ])
         assert mock_get_ctx.call_count == 2
         mock_connect.assert_called_once_with('endpoint')

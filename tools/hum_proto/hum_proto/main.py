@@ -40,11 +40,17 @@ from hum_proto import ssl_utils
     'to the file specified with "--certfile".',
 )
 @cli_tools.argument(
+    '--cafile', '-C',
+    help='The name of a single file in PEM format containing the CA '
+    "certificates required to establish the authenticity of a peer's "
+    'certificate.',
+)
+@cli_tools.argument(
     '--debug', '-d',
     action='store_true',
     help='Enable debugging mode.',
 )
-def main(endpoint, certfile, keyfile):
+def main(endpoint, certfile, keyfile, cafile):
     """
     Start a full-screen protocol analyzer connected to a specified
     Humboldt server.
@@ -57,11 +63,14 @@ def main(endpoint, certfile, keyfile):
     :param str keyfile: The path to a single file in PEM format
                         containing the key corresponding to the
                         certificate.
+    :param str cafile: The path to a single file in PEM format
+                       containing CA certificates necessary to verify
+                       peer certificates.
     """
 
     # Initialize an SSL context
-    sslctx_cli = ssl_utils.get_ctx(certfile, keyfile)
-    sslctx_srv = ssl_utils.get_ctx(certfile, keyfile, False)
+    sslctx_cli = ssl_utils.get_ctx(certfile, keyfile, cafile)
+    sslctx_srv = ssl_utils.get_ctx(certfile, keyfile, cafile, False)
 
     # Connect to the specified endpoint
     sock = apploop.connect(endpoint) if endpoint else None

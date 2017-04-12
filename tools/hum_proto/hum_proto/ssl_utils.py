@@ -37,6 +37,7 @@ class StubSSLContext(object):
         # Initialize the other values of interest
         self.certfile = None
         self.keyfile = None
+        self.cafile = None
         self.options = 0
         self.verify_mode = ssl.CERT_NONE
 
@@ -68,6 +69,35 @@ class StubSSLContext(object):
         # Save the certfile and keyfile for later use
         self.certfile = certfile
         self.keyfile = keyfile
+
+    def load_verify_locations(self, cafile=None, capath=None, cadata=None):
+        """
+        Load certificate authority files.
+
+        :param str cafile: The path to a file containing a
+                           concatenated series of certificate
+                           authority certificates.
+        :param str capath: The path to a directory containing a
+                           concatenated series of certificate
+                           authority certificates.  This is
+                           unimplemented in the stub.
+        :param cadata: An ASCII string containing one or more
+                       PEM-encoded certificates or a ``bytes`` string
+                       containing one or more DER-encoded
+                       certificates.  This is unimplemented in the
+                       stub.
+        """
+
+        # Check that the file exists; this will raise the appropriate
+        # exceptions if the file can't be found.
+        if cafile:
+            with open(cafile):
+                pass
+        if capath or cadata:
+            raise Exception('Stub is unable to handle capath or cadata values')
+
+        # Save the cafile for later use
+        self.cafile = cafile
 
     def wrap_socket(self, sock, server_side=False,
                     do_handshake_on_connect=True,
@@ -101,7 +131,7 @@ class StubSSLContext(object):
         return ssl.wrap_socket(
             sock, keyfile=self.keyfile, certfile=self.certfile,
             server_side=server_side, cert_reqs=self.verify_mode,
-            ssl_version=self.protocol,
+            ssl_version=self.protocol, ca_certs=self.cafile,
             do_handshake_on_connect=do_handshake_on_connect,
             suppress_ragged_eofs=suppress_ragged_eofs,
         )
@@ -110,7 +140,7 @@ class StubSSLContext(object):
 SSLContext = getattr(ssl, 'SSLContext', StubSSLContext)
 
 
-def get_ctx(certfile, keyfile, required=True):
+def get_ctx(certfile, keyfile, cafile, required=True):
     """
     Create an SSL context.
 
@@ -121,6 +151,9 @@ def get_ctx(certfile, keyfile, required=True):
     :param str keyfile: The path to a single file in PEM format
                         containing the key corresponding to the
                         certificate.
+    :param str cafile: The path to a single file in PEM format
+                       containing CA certificates necessary to verify
+                       peer certificates.
     :param bool required: A ``True`` value if a peer certificate
                           should be required, ``False`` otherwise.
                           Defaults to ``True``.
@@ -144,5 +177,9 @@ def get_ctx(certfile, keyfile, required=True):
     # Load the chain and key files
     if certfile:
         ctx.load_cert_chain(certfile, keyfile)
+
+    # Load the certificate authority file
+    if cafile:
+        ctx.load_verify_locations(cafile)
 
     return ctx
