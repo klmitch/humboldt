@@ -91,6 +91,20 @@ struct _conn_state_s {
  */
 #define CONN_STATE_TLS		0x20
 
+/** \brief Flags update flag.
+ *
+ * When passed to connection_set_state(), this flag indicates that the
+ * provided connection state flags should be set.
+ */
+#define CONN_STATE_FLAGS_SET	0x80000000
+
+/** \brief Status update flag.
+ *
+ * When passed to connection_set_state(), this flag indicates that the
+ * connection status value should be updated.
+ */
+#define CONN_STATE_STATUS	0x10000000
+
 /** \brief Connection structure.
  *
  * This structure contains a description of the connection.
@@ -157,9 +171,36 @@ connection_t *connection_create(runtime_t *runtime, endpoint_t *endpoint,
  * \param[in]		conn	The connection.
  *
  * \return	A true value if successful, false otherwise.  On
- *		failure, the connection will be destroyed.
+ *		failure, the connection should be destroyed by the
+ *		caller.
  */
 int connection_send_state(connection_t *conn);
+
+/** \brief Set connection state.
+ *
+ * Updates the connection state on the specified connection.  If
+ * changes are made to the connection state, this will also call
+ * connection_send_state() on the connection to alert the other end to
+ * the state change.
+ *
+ * \param[in,out]	conn	The connection.
+ * \param[in]		cst_flags
+ *				Connection state flags to update.
+ *				Ignored unless #CONN_STATE_FLAGS_SET
+ *				is specified to \p flags.
+ * \param[in]		cst_status
+ *				Connection status to switch to.
+ *				Ignored unless #CONN_STATE_STATUS is
+ *				specified to \p flags.
+ * \param[in]		flags	Flags to control which elements of the
+ *				connection state are affected.
+ *
+ * \return	A true value if successful, false otherwise.  On
+ *		failure, the connection should be destroyed by the
+ *		caller.
+ */
+int connection_set_state(connection_t *conn, uint8_t cst_flags,
+			 conn_status_t cst_status, uint32_t flags);
 
 /** \brief Send an error report.
  *

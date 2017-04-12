@@ -250,6 +250,29 @@ connection_send_state(connection_t *conn)
   return 1;
 }
 
+int
+connection_set_state(connection_t *conn, uint8_t cst_flags,
+		     conn_status_t cst_status, uint32_t flags)
+{
+  conn_state_t prev = conn->con_state;
+
+  /* Should we set flags? */
+  if (flags & CONN_STATE_FLAGS_SET)
+    conn->con_state.cst_flags |= cst_flags;
+
+  /* How about the status? */
+  if (flags & CONN_STATE_STATUS)
+    conn->con_state.cst_status = cst_status;
+
+  /* If there were changes, send a state update */
+  if (prev.cst_flags != conn->con_state.cst_flags ||
+      prev.cst_status != conn->con_state.cst_status)
+    return connection_send_state(conn);
+
+  /* No changes, so we were successful */
+  return 1;
+}
+
 void
 connection_report_error(connection_t *conn, conn_error_t error, ...)
 {
