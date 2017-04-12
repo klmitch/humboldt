@@ -845,6 +845,91 @@ class StartTLSReply(Message):
     PROTOCOL = 2
     default_carrier_flags = 'reply'
 
+    def _getpeer(self, sock):
+        """
+        Given an SSL socket, obtain the peer name.  If the common name is
+        available, returns that; otherwise, forms a distinguished name
+        from all the components of the certificate subject.
+
+        :param sock: An SSL socket.
+        :type sock: ``ssl.SSLSocket``
+
+        :returns: A displayable peer certificate name.
+        :rtype: ``str``
+        """
+
+        # Get the peer certificate
+        peer = sock.getpeercert()
+        if not peer:
+            return None
+
+        # Begin building a full distinguished name, which we'll return
+        # if we don't find a 'commonName' RDN
+        distinguished = []
+        for rdn in peer['subject']:
+            # Build up the attributes of the RDN
+            attrs = []
+            for name, value in rdn:
+                attrs.append('%s=%s' % (name, value))
+
+            # Construct the RDN string
+            rdn_str = '/'.join(attrs)
+
+            # If it's the common name, chop that out and return it
+            if rdn_str.startswith('commonName='):
+                return rdn_str[len('commonName='):]
+
+            # Add it to the distinguished name
+            distinguished.append(rdn_str)
+
+        # Return the full distinguished name
+        return ', '.join(distinguished)
+
+    def action(self, apploop):
+        """
+        An action is invoked when a message is sent.  This action is
+        designed to start a TLS exchange in server mode.
+
+        :param apploop: The application loop.
+        :type apploop: ``hum_proto.apploop.ApplicationLoop``
+        """
+
+        # Wrap the socket
+        apploop.display('Initiating TLS (server mode)')
+        try:
+            apploop.wrap(apploop.sslctx_srv.wrap_socket, server_side=True)
+        except Exception as err:
+            apploop.display('TLS exchange failed: %s' % err)
+            return
+
+        # Get the peer certificate information and display it
+        peer = self._getpeer(apploop.sock)
+        if peer:
+            apploop.display('TLS exchange succeeded; peer: %s' % peer)
+        else:
+            apploop.display('TLS exchange succeeded; no peer information')
+
+    def reaction(self, apploop):
+        """
+        A reaction is invoked when a message is received.  This reaction
+        is designed to start a TLS exchange in client mode.
+
+        :param apploop: The application loop.
+        :type apploop: ``hum_proto.apploop.ApplicationLoop``
+        """
+
+        # Wrap the socket
+        apploop.display('Initiating TLS (client mode)')
+        try:
+            apploop.wrap(apploop.sslctx_cli.wrap_socket, server_side=False)
+        except Exception as err:
+            apploop.display('TLS exchange failed: %s' % err)
+            return
+
+        # Get the peer certificate information and display it
+        apploop.display('TLS exchange succeeded; peer: %s' %
+                        self._getpeer(apploop.sock))
+
 
 class StartTLSRequest(Message):
     """
