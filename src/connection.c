@@ -140,6 +140,8 @@ connection_create(runtime_t *runtime, endpoint_t *endpoint,
   connection->con_endpoint = endpoint;
   connection->con_type = endpoint->ep_config->epc_type;
   connection->con_flags = 0;
+  connection->con_bev = 0;
+  connection->con_root = 0;
   connection->con_socket = sock;
   connection->con_runtime = runtime;
 
@@ -169,28 +171,19 @@ connection_create(runtime_t *runtime, endpoint_t *endpoint,
     return 0;
   }
 
-  /* Set the top of the bufferevent chain */
-  connection->con_bev = connection->con_root;
+  /* Set the magic number, now that it's valid */
+  connection->con_magic = CONNECTION_MAGIC;
 
-  /* Set the bufferevent callbacks */
-  bufferevent_setcb(connection->con_bev,
-		    (bufferevent_data_cb)_connection_read,
-		    (bufferevent_data_cb)_connection_write,
-		    (bufferevent_event_cb)_connection_event, connection);
-
-  /* Enable it for reading or writing */
-  if (bufferevent_enable(connection->con_root, EV_READ)) {
+  /* Install the root bufferevent */
+  if (!connection_install(connection, connection->con_root)) {
     log_emit(runtime->rt_config, LOG_WARNING,
-	     "Unable to enable bufferevent for %s (id %" PRIdPTR ")",
+	     "Unable to install bufferevent for %s (id %" PRIdPTR ")",
 	     ep_addr_describe(addr, address, sizeof(address)), sock);
     bufferevent_free(connection->con_root);
     evutil_closesocket(sock);
     release(&connections, connection);
     return 0;
   }
-
-  /* Set the magic number, now that it's valid */
-  connection->con_magic = CONNECTION_MAGIC;
 
   /* Add it to the list of connections */
   link_append(&runtime->rt_connections, &connection->con_link);
@@ -202,6 +195,26 @@ connection_create(runtime_t *runtime, endpoint_t *endpoint,
   }
 
   return connection;
+}
+
+int
+connection_install(connection_t *conn, struct bufferevent *bev)
+{
+  common_verify(conn, CONNECTION_MAGIC);
+
+  /* Set the callbacks on the bufferevent */
+  bufferevent_setcb(bev, (bufferevent_data_cb)_connection_read,
+		    (bufferevent_data_cb)_connection_write,
+		    (bufferevent_event_cb)_connection_event, conn);
+
+  /* Enable the bufferevent for reading */
+  if (bufferevent_enable(bev, EV_READ))
+    return 0;
+
+  /* Install the bufferevent on the connection */
+  conn->con_bev = bev;
+
+  return 1;
 }
 
 int
@@ -366,10 +379,10 @@ connection_destroy(connection_t *conn, int immediate)
     }
   }
 
-  /* Free the bufferevents */
-  if (conn->con_bev != conn->con_root)
-    bufferevent_free(conn->con_bev);
+  /* Free the root bufferevent */
   bufferevent_free(conn->con_root);
+
+  /* Zero out all the bufferevents */
   conn->con_root = 0;
   conn->con_bev = 0;
 

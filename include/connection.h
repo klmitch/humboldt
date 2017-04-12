@@ -164,6 +164,22 @@ struct _connection_s {
 connection_t *connection_create(runtime_t *runtime, endpoint_t *endpoint,
 				evutil_socket_t sock, ep_addr_t *addr);
 
+/** \brief Install a bufferevent.
+ *
+ * This function is used to install a bufferevent on a connection.  It
+ * is presumed that the bufferevent is already configured with its
+ * underlying transport; this function just installs the callbacks and
+ * ensures that it is enabled.
+ *
+ * \param[in,out]	conn	The connection.
+ * \param[in,out]	bev	The bufferevent to install on the
+ *				connection.
+ *
+ * \return	A true value if the bufferevent was successfully
+ *		installed, false otherwise.
+ */
+int connection_install(connection_t *conn, struct bufferevent *bev);
+
 /** \brief Send connection state.
  *
  * Send the connection state to the connection.
