@@ -102,6 +102,10 @@ _connection_event(struct bufferevent *bev, short events, connection_t *conn)
 {
   char conn_desc[ADDR_DESCRIPTION];
 
+  /* Give the TLS module a chance to process the events */
+  if ((conn->con_flags & CONN_FLAG_TLS_HANDSHAKE) && ssl_event(conn, events))
+    return;
+
   if (events & (BEV_EVENT_ERROR | BEV_EVENT_EOF)) {
     if (events & BEV_EVENT_ERROR)
       log_emit(conn->con_runtime->rt_config, LOG_NOTICE,
@@ -145,6 +149,7 @@ connection_create(runtime_t *runtime, endpoint_t *endpoint,
   connection->con_flags = 0;
   connection->con_bev = 0;
   connection->con_root = 0;
+  connection->con_ssl = 0;
   connection->con_socket = sock;
   connection->con_runtime = runtime;
 
@@ -343,8 +348,7 @@ connection_report_error(connection_t *conn, conn_error_t error, ...)
   }
 
   /* Make a best effort to send the message */
-  if (!protocol_buf_send(&pbuf, conn))
-    bufferevent_flush(conn->con_bev, EV_WRITE, BEV_FINISHED);
+  protocol_buf_send(&pbuf, conn);
 
   /* Free the error message */
   protocol_buf_free(&pbuf);
@@ -386,21 +390,37 @@ connection_destroy(connection_t *conn, int immediate)
   if (linked(&conn->con_link))
     link_pop(&conn->con_link);
 
-  /* Disable reading from the bufferevent */
-  bufferevent_disable(conn->con_root, EV_READ);
+  /* Shut down the SSL connection */
+  ssl_shutdown(conn);
+
+  /* Initiate a flush */
+  bufferevent_flush(conn->con_bev, EV_WRITE, BEV_FINISHED);
 
   /* Check if there's pending data */
   if (!immediate &&
       evbuffer_get_length(bufferevent_get_output(conn->con_root))) {
     /* We'll do a deferred destroy */
     conn->con_flags |= CONN_FLAG_CLOSING;
-    if (!bufferevent_enable(conn->con_root, EV_WRITE)) {
+
+    /* Reset the callbacks, since we're abandoning the top-level buffer */
+    bufferevent_setcb(conn->con_root,
+		      (bufferevent_data_cb)_connection_read,
+		      (bufferevent_data_cb)_connection_write,
+		      (bufferevent_event_cb)_connection_event, conn);
+
+    /* Enable reading and writing on the root bufferevent */
+    if (!bufferevent_enable(conn->con_root, EV_READ | EV_WRITE)) {
       log_emit(conn->con_runtime->rt_config, LOG_DEBUG,
 	       "Deferring close of connection to %s",
 	       connection_describe(conn, conn_desc, sizeof(conn_desc)));
       return;
     }
   }
+
+  /* Free and zero the SSL object */
+  if (conn->con_ssl)
+    ssl_free(conn->con_ssl);
+  conn->con_ssl = 0;
 
   /* Free the root bufferevent */
   bufferevent_free(conn->con_root);

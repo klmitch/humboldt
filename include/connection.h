@@ -57,6 +57,7 @@ typedef enum _conn_error_e {
 #include "endpoint.h"		/* for endpoint types */
 #include "runtime.h"		/* for runtime_t */
 #include "protocol.h"		/* for protocol_buf_t */
+#include "ssl.h"
 
 /** \brief Connection state structure.
  *
@@ -121,6 +122,7 @@ struct _connection_s {
 	       *con_bev;	/**< Libevent bufferevent for connection */
   struct bufferevent
 	       *con_root;	/**< Root bufferevent for socket */
+  ssl_conn_t	con_ssl;	/**< TLS data for the connection */
   evutil_socket_t
 		con_socket;	/**< Connection socket */
   runtime_t    *con_runtime;	/**< Humboldt runtime */
@@ -141,6 +143,15 @@ struct _connection_s {
  * buffer for the connection.
  */
 #define CONN_FLAG_CLOSING	0x80000000
+
+/** \brief Connection is in a TLS handshake.
+ *
+ * This non-state flag indicates that a TLS handshake is pending on
+ * the connection.  This is set when the start TLS request message is
+ * received and processed, and alters the way that the connection
+ * event processing is handled.
+ */
+#define CONN_FLAG_TLS_HANDSHAKE	0x40000000
 
 /** \brief Allocate and initialize a connection.
  *
