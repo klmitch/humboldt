@@ -605,7 +605,8 @@ ssl_event(connection_t *conn, short events)
     if ((len = X509_NAME_get_text_by_NID(subject, NID_commonName,
 					 name, len + 1)) >= 0)
       log_emit(conn->con_runtime->rt_config, LOG_INFO,
-	       "SSL peer is %s", name);
+	       "SSL peer at %s is %s",
+	       connection_describe(conn, conn_desc, sizeof(conn_desc)), name);
 
     /* Clean up after ourselves */
     free(name);
