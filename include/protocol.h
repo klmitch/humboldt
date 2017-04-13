@@ -347,7 +347,7 @@ int protocol_buf_send(protocol_buf_t *pbuf, connection_t *conn);
  *				no full message was in the buffer,
  *				this will be a \c NULL pointer.
  *
- * \returns	A true value if successful, including if no complete
+ * \return	A true value if successful, including if no complete
  *		message was found in the buffer; false otherwise.
  */
 int protocol_buf_recv(struct evbuffer *in, protocol_buf_t **pbuf_p);
