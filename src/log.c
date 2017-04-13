@@ -132,6 +132,18 @@ log_init(config_t *conf)
   conf->cf_flags |= CONFIG_LOG_INITIALIZED;
 }
 
+/* Note: this assumes that LOG_EMERG == 0 and LOG_DEBUG == 7 */
+const char *prefixes[] = {
+  "[ EMERG ] ",
+  "[ ALERT ] ",
+  "[  CRIT ] ",
+  "[ ERROR ] ",
+  "[WARNING] ",
+  "[ NOTICE] ",
+  "[  INFO ] ",
+  "[ DEBUG ] "
+};
+
 void
 log_vemit(config_t *conf, int priority, const char *fmt, va_list ap)
 {
@@ -161,6 +173,7 @@ log_vemit(config_t *conf, int priority, const char *fmt, va_list ap)
   stream = priority <= LOG_WARNING ? stderr : stdout;
 
   /* Emit the log message */
+  fprintf(stream, prefixes[priority]);
   vfprintf(stream, fmt, ap);
   fputc('\n', stream);
   fflush(stream);
