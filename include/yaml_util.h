@@ -17,6 +17,7 @@
 #ifndef _HUMBOLDT_YAML_UTIL_H
 #define _HUMBOLDT_YAML_UTIL_H
 
+#include <stdarg.h>		/* for va_list */
 #include <stdint.h>		/* for uint32_t, intmax_t */
 #include <stdlib.h>		/* for size_t */
 #include <yaml.h>
@@ -217,6 +218,24 @@ void yaml_ctx_path_pop(yaml_ctx_t *ctx);
  */
 void yaml_ctx_report(yaml_ctx_t *ctx, yaml_mark_t *loc, int priority,
 		     const char *fmt, ...);
+
+/** \brief Report something related to the configuration.
+ *
+ * This is a \c stdarg version of yaml_ctx_report().
+ *
+ * \param[in]		ctx	The YAML file context.
+ * \param[in]		loc	The location of the YAML node.
+ *				Optional; pass \c NULL if not
+ *				available.
+ * \param[in]		priority
+ * 				The log priority, one of the values
+ * 				accepted by syslog().  This must not
+ *				be combined with a facility code.
+ * \param[in]		fmt	A format string for the log message.
+ * \param[in,out]	ap	The variable arguments pointer.
+ */
+void yaml_ctx_vreport(yaml_ctx_t *ctx, yaml_mark_t *loc, int priority,
+		      const char *fmt, va_list ap);
 
 /** \brief Process a YAML sequence.
  *

@@ -76,10 +76,9 @@ yaml_ctx_path_pop(yaml_ctx_t *ctx)
 }
 
 void
-yaml_ctx_report(yaml_ctx_t *ctx, yaml_mark_t *loc, int priority,
-		const char *fmt, ...)
+yaml_ctx_vreport(yaml_ctx_t *ctx, yaml_mark_t *loc, int priority,
+		 const char *fmt, va_list ap)
 {
-  va_list ap;
   char msgbuf[LOGMSG_BUF];
   int n;
 
@@ -97,17 +96,26 @@ yaml_ctx_report(yaml_ctx_t *ctx, yaml_mark_t *loc, int priority,
     msgbuf[n++] = ':';
   if (n < sizeof(msgbuf))
     msgbuf[n++] = ' ';
-  if (n < sizeof(msgbuf)) {
-    va_start(ap, fmt);
+  if (n < sizeof(msgbuf))
     n += vsnprintf(msgbuf + n, sizeof(msgbuf) - n, fmt, ap);
-    va_end(ap);
-  }
 
   /* Make sure the buffer is terminated */
   if (n >= sizeof(msgbuf))
     msgbuf[sizeof(msgbuf) - 1] = '\0';
 
   log_emit(ctx->yc_conf, priority, "%s", msgbuf);
+}
+
+void
+yaml_ctx_report(yaml_ctx_t *ctx, yaml_mark_t *loc, int priority,
+		const char *fmt, ...)
+{
+  va_list ap;
+
+  /* Call yaml_ctx_vreport() */
+  va_start(ap, fmt);
+  yaml_ctx_vreport(ctx, loc, priority, fmt, ap);
+  va_end(ap);
 }
 
 static int

@@ -31,9 +31,84 @@
  */
 typedef struct _config_s config_t;
 
+/** \brief Configuration context.
+ *
+ * Contains information required to report log messages pertaining to
+ * the configuration.
+ */
+typedef struct _conf_ctx_s conf_ctx_t;
+
+/** \brief Configuration context flavor.
+ *
+ * The possible flavors for the configuration context.  This
+ * information is used by config_report() to pick the correct logging
+ * function to write logs to.
+ */
+typedef enum _conf_ctx_flavor_e {
+  CTX_FLAVOR_CONF,		/**< Context contains only configuration */
+  CTX_FLAVOR_YAML		/**< Context contains YAML context */
+} conf_ctx_flavor_t;
+
 #include "db.h"		/* for hash_tab_t */
 #include "endpoint.h"	/* for endpoint types; depends on config_t */
 #include "ssl.h"	/* for ssl_conf_t; depends on config_t */
+#include "yaml_util.h"	/* for yaml_ctx_t, yaml_mark_t */
+
+/** \brief Configuration context structure.
+ *
+ * This structure contains the definition of the configuration
+ * context.
+ */
+struct _conf_ctx_s {
+  conf_ctx_flavor_t
+		cc_flavor;	/**< Context flavor */
+  union {
+    config_t   *ccd_conf;	/**< The configuration object */
+    struct {
+      yaml_ctx_t
+	       *ccdy_ctx;	/**< The YAML context */
+      yaml_mark_t
+	       *ccdy_loc;	/**< The YAML location */
+    }		ccd_yaml;	/**< YAML context and location data */
+  }		cc_data;	/**< The context data */
+};
+
+/** \brief Initialize a configuration context from configuration.
+ *
+ * Initialize a configuration context structure using just
+ * configuration.  This will cause config_report() to use plain old
+ * log_emit() to emit the log messages.  This is a static initializer.
+ *
+ * \param[in]		conf	The configuration structure.
+ */
+#define CONF_CTX_CONF(conf)			\
+  {						\
+    CTX_FLAVOR_CONF,				\
+    {						\
+      .ccd_conf = (conf)			\
+    }						\
+  }
+
+/** \brief Initialize a configuration context from a YAML context.
+ *
+ * Initialize a configuration context structure using the specified
+ * YAML context.  This will cause config_report() to use
+ * yaml_ctx_report() to emit the log messages.  This is a static
+ * initializer.
+ *
+ * \param[in]		ctx	The YAML context.
+ * \param[in]		node	A YAML node.  Optional.  If provided,
+ *				the node's \c start_mark will be
+ *				passed to yaml_ctx_report().
+ */
+#define CONF_CTX_YAML(ctx, node)				\
+  {								\
+    CTX_FLAVOR_YAML,						\
+    {								\
+      .ccd_yaml.ccdy_ctx = (ctx),				\
+      .ccd_yaml.ccdy_loc = (node) ? &(node)->start_mark : 0	\
+    }								\
+  }
 
 /** \brief Configuration structure.
  *
@@ -178,5 +253,20 @@ struct _config_s {
  * \param[in]		argv	The command line arguments.
  */
 void initialize_config(config_t *conf, int argc, char **argv);
+
+/** \brief Report a message about configuration.
+ *
+ * Given a #conf_ctx_t object, generates a log message utilizing the
+ * appropriate logging backend for the configuration context.
+ *
+ * \param[in]		conf_ctx
+ *				The configuration context.
+ * \param[in]		priority
+ * 				The log priority, one of the values
+ * 				accepted by syslog().  This must not
+ *				be combined with a facility code.
+ * \param[in]		fmt	A format string for the log message.
+ */
+void config_report(conf_ctx_t *conf_ctx, int priority, const char *fmt, ...);
 
 #endif /* _HUMBOLDT_CONFIGURATION_H */

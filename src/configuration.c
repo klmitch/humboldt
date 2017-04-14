@@ -18,6 +18,7 @@
 
 #include <errno.h>
 #include <getopt.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -192,6 +193,31 @@ parse_args(config_t *conf, int argc, char **argv)
   }
 }
 
+void
+config_report(conf_ctx_t *conf_ctx, int priority, const char *fmt, ...)
+{
+  va_list ap;
+
+  /* Initialize the va_list */
+  va_start(ap, fmt);
+
+  /* Log to the correct destination */
+  switch (conf_ctx->cc_flavor) {
+  case CTX_FLAVOR_CONF:
+    log_vemit(conf_ctx->cc_data.ccd_conf, priority, fmt, ap);
+    break;
+
+  case CTX_FLAVOR_YAML:
+    yaml_ctx_vreport(conf_ctx->cc_data.ccd_yaml.ccdy_ctx,
+		     conf_ctx->cc_data.ccd_yaml.ccdy_loc,
+		     priority, fmt, ap);
+    break;
+  }
+
+  /* Clean up */
+  va_end(ap);
+}
+
 static void
 proc_debug(const char *key, config_t *conf, yaml_ctx_t *ctx,
 	   yaml_node_t *value)
@@ -235,6 +261,7 @@ static void
 proc_endpoint_ad_network(const char *key, ep_ad_t *ad,
 			 yaml_ctx_t *ctx, yaml_node_t *value)
 {
+  conf_ctx_t conf_ctx = CONF_CTX_YAML(ctx, value);
   const char *network;
 
   common_verify(ad, EP_AD_MAGIC);
@@ -242,9 +269,9 @@ proc_endpoint_ad_network(const char *key, ep_ad_t *ad,
   /* Convert the network name as a string */
   if (yaml_get_str(ctx, value, &network, 0, 0)) {
     if (strlen(network) > NETWORK_LEN) {
-      yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-		      "Network name \"%s\" too long; maximum length: %d",
-		      network, NETWORK_LEN);
+      config_report(&conf_ctx, LOG_WARNING,
+		    "Network name \"%s\" too long; maximum length: %d",
+		    network, NETWORK_LEN);
       ad->epa_flags |= EP_AD_INVALID;
     } else
       strcpy(ad->epa_network, network);
@@ -281,6 +308,7 @@ static void
 proc_endpoint_ad(int idx, struct epconfig *epc, yaml_ctx_t *ctx,
 		 yaml_node_t *value)
 {
+  conf_ctx_t conf_ctx = CONF_CTX_YAML(ctx, value);
   const char *network;
   size_t netlen;
   ep_ad_t *ad;
@@ -289,8 +317,8 @@ proc_endpoint_ad(int idx, struct epconfig *epc, yaml_ctx_t *ctx,
 
   /* Allocate an advertisement */
   if (!(ad = ep_ad_create(epc->endpoint))) {
-    yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-		    "Out of memory reading endpoint advertisements");
+    config_report(&conf_ctx, LOG_WARNING,
+		  "Out of memory reading endpoint advertisements");
     return;
   }
 
@@ -301,9 +329,9 @@ proc_endpoint_ad(int idx, struct epconfig *epc, yaml_ctx_t *ctx,
   else if (yaml_get_str(ctx, value, &network, &netlen, ALLOW_NULL)) {
     if (network) {
       if (netlen > NETWORK_LEN) {
-	yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-			"Network name \"%s\" too long; maximum length: %d",
-			network, NETWORK_LEN);
+	config_report(&conf_ctx, LOG_WARNING,
+		      "Network name \"%s\" too long; maximum length: %d",
+		      network, NETWORK_LEN);
 	ad->epa_flags |= EP_AD_INVALID;
       } else
 	strcpy(ad->epa_network, network);
@@ -328,14 +356,13 @@ proc_endpoint_ad(int idx, struct epconfig *epc, yaml_ctx_t *ctx,
     break;
 
   case DBERR_DUPLICATE:
-    yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-		    "Advertisement is a duplicate");
+    config_report(&conf_ctx, LOG_WARNING, "Advertisement is a duplicate");
     ep_ad_release(ad);
     break;
 
   case DBERR_NOMEMORY:
-    yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-		    "Out of memory reading endpoint advertisements");
+    config_report(&conf_ctx, LOG_WARNING,
+		  "Out of memory reading endpoint advertisements");
     ep_ad_release(ad);
     break;
   }
@@ -405,6 +432,7 @@ static void
 proc_endpoint_type(const char *key, struct epconfig *epc,
 		   yaml_ctx_t *ctx, yaml_node_t *value)
 {
+  conf_ctx_t conf_ctx = CONF_CTX_YAML(ctx, value);
   const char *type;
 
   common_verify(epc->endpoint, EP_CONFIG_MAGIC);
@@ -416,9 +444,9 @@ proc_endpoint_type(const char *key, struct epconfig *epc,
     else if (!strcmp(type, "peer"))
       epc->endpoint->epc_type = ENDPOINT_PEER;
     else {
-      yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-		      "Invalid endpoint type \"%s\"; "
-		      "use \"client\" or \"peer\"", type);
+      config_report(&conf_ctx, LOG_WARNING,
+		    "Invalid endpoint type \"%s\"; "
+		    "use \"client\" or \"peer\"", type);
       epc->endpoint->epc_flags |= EP_CONFIG_INVALID;
     }
   } else
@@ -436,6 +464,7 @@ static mapkeys_t endpoint_config[] = {
 static void
 proc_endpoint(int idx, config_t *conf, yaml_ctx_t *ctx, yaml_node_t *value)
 {
+  conf_ctx_t conf_ctx = CONF_CTX_YAML(ctx, value);
   struct epconfig epc = {0, conf};
   ep_ad_t *ad;
 
@@ -443,8 +472,7 @@ proc_endpoint(int idx, config_t *conf, yaml_ctx_t *ctx, yaml_node_t *value)
 
   /* Allocate an endpoint */
   if (!(epc.endpoint = ep_config_create())) {
-    yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-		    "Out of memory reading endpoints");
+    config_report(&conf_ctx, LOG_WARNING, "Out of memory reading endpoints");
     return;
   }
 
@@ -469,15 +497,13 @@ proc_endpoint(int idx, config_t *conf, yaml_ctx_t *ctx, yaml_node_t *value)
     break; /* add successful */
 
   case DBERR_DUPLICATE:
-    yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-		    "Endpoint is a duplicate");
+    config_report(&conf_ctx, LOG_WARNING, "Endpoint is a duplicate");
     ep_config_release(epc.endpoint);
     return;
     break; /* not reached */
 
   case DBERR_NOMEMORY:
-    yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-		    "Out of memory reading endpoints");
+    config_report(&conf_ctx, LOG_WARNING, "Out of memory reading endpoints");
     ep_config_release(epc.endpoint);
     return;
     break; /* not reached */
@@ -497,8 +523,8 @@ proc_endpoint(int idx, config_t *conf, yaml_ctx_t *ctx, yaml_node_t *value)
     link_iter(&epc.endpoint->epc_ads, ep_config_release_ads, 0);
   } else if (!epc.endpoint->epc_ads.lh_count) {
     if (!(ad = ep_ad_create(epc.endpoint))) {
-      yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-		      "Out of memory creating default endpoint advertisement");
+      config_report(&conf_ctx, LOG_WARNING,
+		    "Out of memory creating default endpoint advertisement");
       return;
     }
 
@@ -513,14 +539,14 @@ proc_endpoint(int idx, config_t *conf, yaml_ctx_t *ctx, yaml_node_t *value)
       break;
 
     case DBERR_DUPLICATE:
-      yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-		      "Default advertisement is a duplicate");
+      config_report(&conf_ctx, LOG_WARNING,
+		    "Default advertisement is a duplicate");
       ep_ad_release(ad);
       break;
 
     case DBERR_NOMEMORY:
-      yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-		      "Out of memory creating default endpoint advertisement");
+      config_report(&conf_ctx, LOG_WARNING,
+		    "Out of memory creating default endpoint advertisement");
       ep_ad_release(ad);
       break;
     }
@@ -541,6 +567,7 @@ static void
 proc_facility(const char *key, config_t *conf, yaml_ctx_t *ctx,
               yaml_node_t *value)
 {
+  conf_ctx_t conf_ctx = CONF_CTX_YAML(ctx, value);
   const char *name;
   int facility;
 
@@ -549,8 +576,8 @@ proc_facility(const char *key, config_t *conf, yaml_ctx_t *ctx,
   /* Convert the value as a string */
   if (yaml_get_str(ctx, value, &name, 0, 0)) {
     if ((facility = log_facility(name)) < 0)
-      yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-		      "Unrecognized facility name \"%s\"", name);
+      config_report(&conf_ctx, LOG_WARNING,
+		    "Unrecognized facility name \"%s\"", name);
     else if (!(conf->cf_flags & CONFIG_FACILITY_FIXED))
       conf->cf_facility = facility;
   }
@@ -574,6 +601,7 @@ static void
 proc_network_network(const char *key, ep_network_t *network,
 		     yaml_ctx_t *ctx, yaml_node_t *value)
 {
+  conf_ctx_t conf_ctx = CONF_CTX_YAML(ctx, value);
   const char *name;
 
   common_verify(network, EP_NETWORK_MAGIC);
@@ -581,9 +609,9 @@ proc_network_network(const char *key, ep_network_t *network,
   /* Convert the network name as a string */
   if (yaml_get_str(ctx, value, &name, 0, 0)) {
     if (strlen(name) > NETWORK_LEN) {
-      yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-		      "Network name \"%s\" too long; maximum length: %d",
-		      name, NETWORK_LEN);
+      config_report(&conf_ctx, LOG_WARNING,
+		    "Network name \"%s\" too long; maximum length: %d",
+		    name, NETWORK_LEN);
       network->epn_flags |= EP_NETWORK_INVALID;
     } else
       strcpy(network->epn_name, name);
@@ -614,6 +642,7 @@ static mapkeys_t network_config[] = {
 static void
 proc_network(int idx, config_t *conf, yaml_ctx_t *ctx, yaml_node_t *value)
 {
+  conf_ctx_t conf_ctx = CONF_CTX_YAML(ctx, value);
   const char *name;
   ep_network_t *network;
 
@@ -621,8 +650,7 @@ proc_network(int idx, config_t *conf, yaml_ctx_t *ctx, yaml_node_t *value)
 
   /* Allocate a network */
   if (!(network = ep_network_create())) {
-    yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-		    "Out of memory reading networks");
+    config_report(&conf_ctx, LOG_WARNING, "Out of memory reading networks");
     return;
   }
 
@@ -633,9 +661,9 @@ proc_network(int idx, config_t *conf, yaml_ctx_t *ctx, yaml_node_t *value)
   else if (yaml_get_str(ctx, value, &name, 0, ALLOW_NULL)) {
     if (name) {
       if (strlen(name) > NETWORK_LEN) {
-	yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-			"Network name \"%s\" too long; maximum length: %d",
-			name, NETWORK_LEN);
+	config_report(&conf_ctx, LOG_WARNING,
+		      "Network name \"%s\" too long; maximum length: %d",
+		      name, NETWORK_LEN);
 	network->epn_flags |= EP_NETWORK_INVALID;
       } else
 	strcpy(network->epn_name, name);
@@ -653,14 +681,13 @@ proc_network(int idx, config_t *conf, yaml_ctx_t *ctx, yaml_node_t *value)
     break; /* add was successful */
 
   case DBERR_DUPLICATE:
-    yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-		    "Network \"%s\" is a duplicate", network->epn_name);
+    config_report(&conf_ctx, LOG_WARNING, "Network \"%s\" is a duplicate",
+		  network->epn_name);
     ep_network_release(network);
     break;
 
   case DBERR_NOMEMORY:
-    yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-		    "Out of memory reading networks");
+    config_report(&conf_ctx, LOG_WARNING, "Out of memory reading networks");
     ep_network_release(network);
     break;
   }
@@ -680,6 +707,7 @@ static void
 proc_statedir(const char *key, config_t *conf, yaml_ctx_t *ctx,
 	      yaml_node_t *value)
 {
+  conf_ctx_t conf_ctx = CONF_CTX_YAML(ctx, value);
   int len;
   const char *dirname;
   char *tmp;
@@ -693,8 +721,8 @@ proc_statedir(const char *key, config_t *conf, yaml_ctx_t *ctx,
   /* Ensure it's a valid path */
   len = strlen(dirname);
   if (*dirname != '/' || len <= 2) {
-    yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-		    "Invalid state directory path \"%s\"", dirname);
+    config_report(&conf_ctx, LOG_WARNING,
+		  "Invalid state directory path \"%s\"", dirname);
     return;
   } else if (conf->cf_flags & CONFIG_STATEDIR_FIXED)
     /* It's fixed from the command line */
@@ -706,8 +734,8 @@ proc_statedir(const char *key, config_t *conf, yaml_ctx_t *ctx,
 
   /* Allocate memory for the new value */
   if (!(tmp = (char *)malloc(len))) {
-    yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-		    "Out of memory setting state directory path");
+    config_report(&conf_ctx, LOG_WARNING,
+		  "Out of memory setting state directory path");
     return;
   }
 
@@ -726,6 +754,7 @@ proc_statedir(const char *key, config_t *conf, yaml_ctx_t *ctx,
 static void
 proc_uuid(const char *key, config_t *conf, yaml_ctx_t *ctx, yaml_node_t *value)
 {
+  conf_ctx_t conf_ctx = CONF_CTX_YAML(ctx, value);
   const char *uuid_text;
 
   common_verify(conf, CONFIG_MAGIC);
@@ -736,8 +765,8 @@ proc_uuid(const char *key, config_t *conf, yaml_ctx_t *ctx, yaml_node_t *value)
 
   /* Parse the UUID */
   if (uuid_parse(uuid_text, conf->cf_uuid)) {
-    yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-		    "Unable to parse UUID \"%s\"", uuid_text);
+    config_report(&conf_ctx, LOG_WARNING, "Unable to parse UUID \"%s\"",
+		  uuid_text);
     return;
   }
 
@@ -780,6 +809,7 @@ count_endpoints(ep_config_t *endpoint, struct typecount *counts)
 int
 config_read(config_t *conf)
 {
+  conf_ctx_t conf_ctx = CONF_CTX_CONF(conf);
   FILE *stream;
   int len, valid;
   struct typecount counts = {0, 0};
@@ -791,8 +821,9 @@ config_read(config_t *conf)
   /* Read the configuration file */
   if (!(stream = fopen(conf->cf_config, "r"))) {
     if (!(conf->cf_flags & CONFIG_FILE_DEFAULT) || errno != ENOENT) {
-      log_emit(conf, LOG_WARNING, "%s opening configuration file \"%s\"",
-	       strerror(errno), conf->cf_config);
+      config_report(&conf_ctx, LOG_WARNING,
+		    "%s opening configuration file \"%s\"",
+		    strerror(errno), conf->cf_config);
       return 0;
     }
   } else {
@@ -810,8 +841,8 @@ config_read(config_t *conf)
   /* Do we need to create a client endpoint? */
   if (!counts.clients) {
     if (!(endpoint = ep_config_create()))
-      log_emit(conf, LOG_WARNING,
-	       "Out of memory creating default client endpoint");
+      config_report(&conf_ctx, LOG_WARNING,
+		    "Out of memory creating default client endpoint");
     else {
       /* Set the basic flags and endpoint type */
       endpoint->epc_flags = EP_CONFIG_UNADVERTISED;
@@ -832,9 +863,9 @@ config_read(config_t *conf)
 
       /* Set the local address */
       if (!ep_addr_set_local(&endpoint->epc_addr, path_buf, 0, 0)) {
-	log_emit(conf, LOG_WARNING,
-		 "Unable to set up client port at \"%s\"; trying loopback",
-		 path_buf);
+	config_report(&conf_ctx, LOG_WARNING,
+		      "Unable to set up client port at \"%s\"; trying "
+		      "loopback", path_buf);
 	/* Clear the local address so we can try again */
 	ep_addr_init(&endpoint->epc_addr);
 #endif
@@ -842,7 +873,8 @@ config_read(config_t *conf)
 	/* Set to the loopback address */
 	if (!ep_addr_set_ipaddr(&endpoint->epc_addr, "127.0.0.1", 0, 0) ||
 	    !ep_addr_set_port(&endpoint->epc_addr, DEFAULT_PORT, 0, 0)) {
-	  log_emit(conf, LOG_WARNING, "Unable to create a client port");
+	  config_report(&conf_ctx, LOG_WARNING,
+			"Unable to create a client port");
 	  endpoint = 0; /* Signal there's no endpoint anymore */
 	}
 
@@ -858,13 +890,13 @@ config_read(config_t *conf)
 
 	case DBERR_DUPLICATE:
 	  /* Shouldn't happen, but cover our bases */
-	  log_emit(conf, LOG_WARNING,
-		   "Default client endpoint is a duplicate");
+	  config_report(&conf_ctx, LOG_WARNING,
+			"Default client endpoint is a duplicate");
 	  break;
 
 	case DBERR_NOMEMORY:
-	  log_emit(conf, LOG_WARNING,
-		   "Out of memory creating default client endpoint");
+	  config_report(&conf_ctx, LOG_WARNING,
+			"Out of memory creating default client endpoint");
 	  break;
 	}
     }
@@ -873,19 +905,19 @@ config_read(config_t *conf)
   /* Do we need to create a peer endpoint? */
   if (!counts.peers) {
     if (!(endpoint = ep_config_create()))
-      log_emit(conf, LOG_WARNING,
-	       "Out of memory creating default peer endpoint");
+      config_report(&conf_ctx, LOG_WARNING,
+		    "Out of memory creating default peer endpoint");
     else {
       /* Set the endpoint type */
       endpoint->epc_type = ENDPOINT_PEER;
 
       /* Set the default port */
       if (!ep_addr_set_port(&endpoint->epc_addr, DEFAULT_PORT, 0, 0))
-	log_emit(conf, LOG_WARNING, "Unable to create a peer port");
+	config_report(&conf_ctx, LOG_WARNING, "Unable to create a peer port");
       else if (!(ad = ep_ad_create(endpoint)))
-	log_emit(conf, LOG_WARNING,
-		 "Out of memory creating default endpoint advertisement for "
-		 "default peer endpoint");
+	config_report(&conf_ctx, LOG_WARNING,
+		      "Out of memory creating default endpoint advertisement "
+		      "for default peer endpoint");
       else {
 	/* Add the endpoint to the configuration */
 	switch (hash_add(&conf->cf_endpoints, &endpoint->epc_hashent)) {
@@ -902,16 +934,16 @@ config_read(config_t *conf)
 
 	  case DBERR_DUPLICATE:
 	    /* Shouldn't happen, but cover our bases */
-	    log_emit(conf, LOG_WARNING,
-		     "Default advertisement for default peer endpoint is a "
-		     "duplicate");
+	    config_report(&conf_ctx, LOG_WARNING,
+			  "Default advertisement for default peer endpoint "
+			  "is a duplicate");
 	    ep_ad_release(ad);
 	    break;
 
 	  case DBERR_NOMEMORY:
-	    log_emit(conf, LOG_WARNING,
-		     "Out of memory creating default endpoint advertisement "
-		     "for default peer endpoint");
+	    config_report(&conf_ctx, LOG_WARNING,
+			  "Out of memory creating default endpoint "
+			  "advertisement for default peer endpoint");
 	    ep_ad_release(ad);
 	    break;
 	  }
@@ -919,12 +951,13 @@ config_read(config_t *conf)
 
 	case DBERR_DUPLICATE:
 	  /* Shouldn't happen, but cover our bases */
-	  log_emit(conf, LOG_WARNING, "Default peer endpoint is a duplicate");
+	  config_report(&conf_ctx, LOG_WARNING,
+			"Default peer endpoint is a duplicate");
 	  break;
 
 	case DBERR_NOMEMORY:
-	  log_emit(conf, LOG_WARNING,
-		   "Out of memory creating default peer endpoint");
+	  config_report(&conf_ctx, LOG_WARNING,
+			"Out of memory creating default peer endpoint");
 	  break;
 	}
       }
@@ -934,7 +967,8 @@ config_read(config_t *conf)
   /* Ensure we have at least one network */
   if (!conf->cf_networks.ht_count) {
     if (!(network = ep_network_create()))
-      log_emit(conf, LOG_WARNING, "Out of memory creating default network");
+      config_report(&conf_ctx, LOG_WARNING,
+		    "Out of memory creating default network");
     else {
       /* Add the network to the configuration */
       switch (hash_add(&conf->cf_networks, &network->epn_hashent)) {
@@ -943,12 +977,14 @@ config_read(config_t *conf)
 
       case DBERR_DUPLICATE:
 	/* Shouldn't happen, but cover our bases */
-	log_emit(conf, LOG_WARNING, "Default network is a duplicate");
+	config_report(&conf_ctx, LOG_WARNING,
+		      "Default network is a duplicate");
 	ep_network_release(network);
 	break;
 
       case DBERR_NOMEMORY:
-	log_emit(conf, LOG_WARNING, "Out of memory creating default network");
+	config_report(&conf_ctx, LOG_WARNING,
+		      "Out of memory creating default network");
 	ep_network_release(network);
 	break;
       }
