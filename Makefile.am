@@ -47,6 +47,7 @@ humboldt_SOURCES = \
 	src/alloc.c \
 	src/configuration.c \
 	src/connection.c \
+	src/db.c \
 	src/endpoint.c \
 	src/log.c \
 	src/main.c \
