@@ -332,7 +332,7 @@ struct _ep_network_s {
   } while (0)
 
 /* Note: included from configuration.h so try to avoid include loop */
-
+#include "configuration.h"
 #include "yaml_util.h"
 
 /** \brief Set a local address.
@@ -342,13 +342,11 @@ struct _ep_network_s {
  * \param[in,out]	addr	The address structure to be updated.
  * \param[in]		path	The local address path.  May not be \c
  *				NULL.
- * \param[in]		ctx	The YAML file context.
- * \param[in]		value	The YAML node being processed.
+ * \param[in]		ctx	The configuration context.
  *
  * \return	A false value if an error occurred, true otherwise.
  */
-int ep_addr_set_local(ep_addr_t *addr, const char *path,
-		      yaml_ctx_t *ctx, yaml_node_t *value);
+int ep_addr_set_local(ep_addr_t *addr, const char *path, conf_ctx_t *ctx);
 
 /** \brief Set an IP address.
  *
@@ -358,13 +356,11 @@ int ep_addr_set_local(ep_addr_t *addr, const char *path,
  * \param[in,out]	addr	The address structure to be updated.
  * \param[in]		pres	The presentation form of the IP
  *				address.
- * \param[in]		ctx	The YAML file context.
- * \param[in]		value	The YAML node being processed.
+ * \param[in]		ctx	The configuration context.
  *
  * \return	A false value if an error occurred, true otherwise.
  */
-int ep_addr_set_ipaddr(ep_addr_t *addr, const char *pres,
-		       yaml_ctx_t *ctx, yaml_node_t *value);
+int ep_addr_set_ipaddr(ep_addr_t *addr, const char *pres, conf_ctx_t *ctx);
 
 /** \brief Set an IP port.
  *
@@ -372,13 +368,11 @@ int ep_addr_set_ipaddr(ep_addr_t *addr, const char *pres,
  *
  * \param[in,out]	addr	The address structure to be updated.
  * \param[in]		port	The port number.
- * \param[in]		ctx	The YAML file context.
- * \param[in]		value	The YAML node being processed.
+ * \param[in]		ctx	The configuration context.
  *
  * \return	A false value if an error occurred, true otherwise.
  */
-int ep_addr_set_port(ep_addr_t *addr, int port,
-		     yaml_ctx_t *ctx, yaml_node_t *value);
+int ep_addr_set_port(ep_addr_t *addr, int port, conf_ctx_t *ctx);
 
 /** \brief Set address from a socket address.
  *
@@ -466,6 +460,23 @@ hash_t ep_addr_hash(void *key);
  */
 ep_ad_t *ep_ad_create(ep_config_t *epconf);
 
+/** \brief Finish initialization of an endpoint advertisement.
+ *
+ * This function is called after an endpoint advertisement has been
+ * fully initialized.  This will ensure that the advertisement's
+ * address information is complete and add the advertisement to the
+ * appropriate tracking data structures.
+ *
+ * \param[in,out]	ad	The endpoint advertisement.
+ * \param[in,out]	conf	The configuration structure.
+ * \param[in]		ctx	The configuration context.
+ *
+ * \return	A true value if successful, false otherwise.  The
+ *		caller is responsible for releasing the
+ *		advertisement.
+ */
+int ep_ad_finish(ep_ad_t *ad, config_t *conf, conf_ctx_t *ctx);
+
 /** \brief Release endpoint advertisement.
  *
  * This function ensures that all memory allocated to represent a
@@ -484,15 +495,21 @@ void ep_ad_release(ep_ad_t *ad);
  */
 ep_config_t *ep_config_create(void);
 
-/** \brief Release endpoint configuration advertisements.
+/** \brief Finish initialization of an endpoint configuration.
  *
- * This is a function compatible with #db_iter_t which can be used to
- * release endpoint advertisements in a linked list.
+ * This function is called after an endpoint configuration has been
+ * fully initialized.  This will ensure that the configurations's
+ * information is complete and add the configuration to the
+ * appropriate tracking data structures.
  *
- * \param[in,out]	obj	The advertisement to release.
- * \param[in]		extra	Extra data.  Ignored.
+ * \param[in,out]	ep_conf	The endpoint configuration.
+ * \param[in,out]	conf	The configuration structure.
+ * \param[in]		ctx	The configuration context.
+ *
+ * \return	A true value if successful, false otherwise.  The
+ *		caller is responsible for releasing the configuration.
  */
-void ep_config_release_ads(void *obj, void *extra);
+int ep_config_finish(ep_config_t *ep_conf, config_t *conf, conf_ctx_t *ctx);
 
 /** \brief Release endpoint configuration.
  *
@@ -511,6 +528,22 @@ void ep_config_release(ep_config_t *config);
  * \return	An initialized endpoint network.
  */
 ep_network_t *ep_network_create(void);
+
+/** \brief Finish initialization of an endpoint network.
+ *
+ * This function is called after an endpoint network has been fully
+ * initialized.  This will ensure that the network's information is
+ * complete and add the network to the appropriate tracking data
+ * structures.
+ *
+ * \param[in,out]	network	The endpoint network.
+ * \param[in,out]	conf	The configuration structure.
+ * \param[in]		ctx	The configuration context.
+ *
+ * \return	A true value if successful, false otherwise.  The
+ *		caller is responsible for releasing the network.
+ */
+int ep_network_finish(ep_network_t *network, config_t *conf, conf_ctx_t *ctx);
 
 /** \brief Release endpoint network.
  *

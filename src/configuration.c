@@ -247,13 +247,14 @@ static void
 proc_endpoint_ad_ip(const char *key, ep_ad_t *ad,
 		    yaml_ctx_t *ctx, yaml_node_t *value)
 {
+  conf_ctx_t conf_ctx = CONF_CTX_YAML(ctx, value);
   const char *pres;
 
   common_verify(ad, EP_AD_MAGIC);
 
   /* Convert the IP as a string and set it */
   if (!yaml_get_str(ctx, value, &pres, 0, 0) ||
-      !ep_addr_set_ipaddr(&ad->epa_addr, pres, ctx, value))
+      !ep_addr_set_ipaddr(&ad->epa_addr, pres, &conf_ctx))
     ad->epa_flags |= EP_AD_INVALID;
 }
 
@@ -283,13 +284,14 @@ static void
 proc_endpoint_ad_port(const char *key, ep_ad_t *ad,
 		      yaml_ctx_t *ctx, yaml_node_t *value)
 {
+  conf_ctx_t conf_ctx = CONF_CTX_YAML(ctx, value);
   long port;
 
   common_verify(ad, EP_AD_MAGIC);
 
   /* Convert the value as an integer and set the port */
   if (!yaml_get_int(ctx, value, &port) ||
-      !ep_addr_set_port(&ad->epa_addr, port, ctx, value))
+      !ep_addr_set_port(&ad->epa_addr, port, &conf_ctx))
     ad->epa_flags |= EP_AD_INVALID;
 }
 
@@ -339,33 +341,10 @@ proc_endpoint_ad(int idx, struct epconfig *epc, yaml_ctx_t *ctx,
   } else
     ad->epa_flags |= EA_INVALID;
 
-  /* Validate the advertisement */
-  if (ad->epa_flags & EA_INVALID) {
+  /* Validate the advertisement and finish setting it up */
+  if ((ad->epa_flags & EA_INVALID) ||
+      !ep_ad_finish(ad, epc->config, &conf_ctx))
     ep_ad_release(ad);
-    return;
-  }
-
-  /* Set up default addressing */
-  ep_addr_default(&ad->epa_addr, &epc->endpoint->epc_addr);
-
-  /* Add the advertisement to the configuration */
-  switch (hash_add(&epc->config->cf_ads, &ad->epa_hashent)) {
-  case DBERR_NONE:
-    /* It was successful; add to the linked list as well */
-    link_append(&epc->endpoint->epc_ads, &ad->epa_link);
-    break;
-
-  case DBERR_DUPLICATE:
-    config_report(&conf_ctx, LOG_WARNING, "Advertisement is a duplicate");
-    ep_ad_release(ad);
-    break;
-
-  case DBERR_NOMEMORY:
-    config_report(&conf_ctx, LOG_WARNING,
-		  "Out of memory reading endpoint advertisements");
-    ep_ad_release(ad);
-    break;
-  }
 }
 
 static void
@@ -390,13 +369,14 @@ static void
 proc_endpoint_ip(const char *key, struct epconfig *epc,
 		 yaml_ctx_t *ctx, yaml_node_t *value)
 {
+  conf_ctx_t conf_ctx = CONF_CTX_YAML(ctx, value);
   const char *pres;
 
   common_verify(epc->endpoint, EP_CONFIG_MAGIC);
 
   /* Convert the IP as a string and set it */
   if (!yaml_get_str(ctx, value, &pres, 0, 0) ||
-      !ep_addr_set_ipaddr(&epc->endpoint->epc_addr, pres, ctx, value))
+      !ep_addr_set_ipaddr(&epc->endpoint->epc_addr, pres, &conf_ctx))
     epc->endpoint->epc_flags |= EP_CONFIG_INVALID;
 }
 
@@ -404,13 +384,14 @@ static void
 proc_endpoint_local(const char *key, struct epconfig *epc,
 		    yaml_ctx_t *ctx, yaml_node_t *value)
 {
+  conf_ctx_t conf_ctx = CONF_CTX_YAML(ctx, value);
   const char *path;
 
   common_verify(epc->endpoint, EP_CONFIG_MAGIC);
 
   /* Convert the value as a string and set it */
   if (!yaml_get_str(ctx, value, &path, 0, 0) ||
-      !ep_addr_set_local(&epc->endpoint->epc_addr, path, ctx, value))
+      !ep_addr_set_local(&epc->endpoint->epc_addr, path, &conf_ctx))
     epc->endpoint->epc_flags |= EP_CONFIG_INVALID;
 }
 
@@ -418,13 +399,14 @@ static void
 proc_endpoint_port(const char *key, struct epconfig *epc,
 		   yaml_ctx_t *ctx, yaml_node_t *value)
 {
+  conf_ctx_t conf_ctx = CONF_CTX_YAML(ctx, value);
   long port;
 
   common_verify(epc->endpoint, EP_CONFIG_MAGIC);
 
   /* Convert the value as an integer and set the port */
   if (!yaml_get_int(ctx, value, &port) ||
-      !ep_addr_set_port(&epc->endpoint->epc_addr, port, ctx, value))
+      !ep_addr_set_port(&epc->endpoint->epc_addr, port, &conf_ctx))
     epc->endpoint->epc_flags |= EP_CONFIG_INVALID;
 }
 
@@ -466,7 +448,6 @@ proc_endpoint(int idx, config_t *conf, yaml_ctx_t *ctx, yaml_node_t *value)
 {
   conf_ctx_t conf_ctx = CONF_CTX_YAML(ctx, value);
   struct epconfig epc = {0, conf};
-  ep_ad_t *ad;
 
   common_verify(conf, CONFIG_MAGIC);
 
@@ -481,76 +462,10 @@ proc_endpoint(int idx, config_t *conf, yaml_ctx_t *ctx, yaml_node_t *value)
 		    endpoint_config, list_count(endpoint_config),
 		    (void *)&epc);
 
-  /* Set the default port as needed */
-  if (!(epc.endpoint->epc_addr.ea_flags & (EA_LOCAL | EA_PORT)))
-    ep_addr_set_port(&epc.endpoint->epc_addr, DEFAULT_PORT, ctx, value);
-
   /* Validate the endpoint */
-  if (epc.endpoint->epc_flags & EP_CONFIG_INVALID) {
+  if ((epc.endpoint->epc_flags & EP_CONFIG_INVALID) ||
+      !ep_config_finish(epc.endpoint, epc.config, &conf_ctx))
     ep_config_release(epc.endpoint);
-    return;
-  }
-
-  /* Add the endpoint to the configuration */
-  switch (hash_add(&conf->cf_endpoints, &epc.endpoint->epc_hashent)) {
-  case DBERR_NONE:
-    break; /* add successful */
-
-  case DBERR_DUPLICATE:
-    config_report(&conf_ctx, LOG_WARNING, "Endpoint is a duplicate");
-    ep_config_release(epc.endpoint);
-    return;
-    break; /* not reached */
-
-  case DBERR_NOMEMORY:
-    config_report(&conf_ctx, LOG_WARNING, "Out of memory reading endpoints");
-    ep_config_release(epc.endpoint);
-    return;
-    break; /* not reached */
-  }
-
-  /* Set up the endpoint type */
-  if (epc.endpoint->epc_addr.ea_flags & EA_LOCAL)
-    epc.endpoint->epc_type = ENDPOINT_CLIENT;
-  else if (epc.endpoint->epc_type == ENDPOINT_UNKNOWN)
-    epc.endpoint->epc_type = ENDPOINT_PEER;
-
-  /* Set up advertisements */
-  if (epc.endpoint->epc_type == ENDPOINT_CLIENT) {
-    epc.endpoint->epc_flags |= EP_CONFIG_UNADVERTISED;
-
-    /* Clear any advertisements */
-    link_iter(&epc.endpoint->epc_ads, ep_config_release_ads, 0);
-  } else if (!epc.endpoint->epc_ads.lh_count) {
-    if (!(ad = ep_ad_create(epc.endpoint))) {
-      config_report(&conf_ctx, LOG_WARNING,
-		    "Out of memory creating default endpoint advertisement");
-      return;
-    }
-
-    /* Set up default addressing */
-    ep_addr_default(&ad->epa_addr, &epc.endpoint->epc_addr);
-
-    /* Add the advertisement to the configuration */
-    switch (hash_add(&epc.config->cf_ads, &ad->epa_hashent)) {
-    case DBERR_NONE:
-      /* It was successful; add it to the linked list also */
-      link_append(&epc.endpoint->epc_ads, &ad->epa_link);
-      break;
-
-    case DBERR_DUPLICATE:
-      config_report(&conf_ctx, LOG_WARNING,
-		    "Default advertisement is a duplicate");
-      ep_ad_release(ad);
-      break;
-
-    case DBERR_NOMEMORY:
-      config_report(&conf_ctx, LOG_WARNING,
-		    "Out of memory creating default endpoint advertisement");
-      ep_ad_release(ad);
-      break;
-    }
-  }
 }
 
 static void
@@ -587,13 +502,14 @@ static void
 proc_network_ip(const char *key, ep_network_t *network,
 		yaml_ctx_t *ctx, yaml_node_t *value)
 {
+  conf_ctx_t conf_ctx = CONF_CTX_YAML(ctx, value);
   const char *pres;
 
   common_verify(network, EP_NETWORK_MAGIC);
 
   /* Convert the IP as a string and set it */
   if (!yaml_get_str(ctx, value, &pres, 0, 0) ||
-      !ep_addr_set_ipaddr(&network->epn_addr, pres, ctx, value))
+      !ep_addr_set_ipaddr(&network->epn_addr, pres, &conf_ctx))
     network->epn_flags |= EP_NETWORK_INVALID;
 }
 
@@ -623,13 +539,14 @@ static void
 proc_network_port(const char *key, ep_network_t *network,
 		  yaml_ctx_t *ctx, yaml_node_t *value)
 {
+  conf_ctx_t conf_ctx = CONF_CTX_YAML(ctx, value);
   long port;
 
   common_verify(network, EP_NETWORK_MAGIC);
 
   /* Convert the value as an integer and set the port */
   if (!yaml_get_int(ctx, value, &port) ||
-      !ep_addr_set_port(&network->epn_addr, port, ctx, value))
+      !ep_addr_set_port(&network->epn_addr, port, &conf_ctx))
     network->epn_flags |= EP_NETWORK_INVALID;
 }
 
@@ -672,25 +589,9 @@ proc_network(int idx, config_t *conf, yaml_ctx_t *ctx, yaml_node_t *value)
     network->epn_flags |= EP_NETWORK_INVALID;
 
   /* Validate the network */
-  if (network->epn_flags & EP_NETWORK_INVALID)
+  if ((network->epn_flags & EP_NETWORK_INVALID) ||
+      !ep_network_finish(network, conf, &conf_ctx))
     ep_network_release(network);
-
-  /* Add the network to the configuration */
-  switch (hash_add(&conf->cf_networks, &network->epn_hashent)) {
-  case DBERR_NONE:
-    break; /* add was successful */
-
-  case DBERR_DUPLICATE:
-    config_report(&conf_ctx, LOG_WARNING, "Network \"%s\" is a duplicate",
-		  network->epn_name);
-    ep_network_release(network);
-    break;
-
-  case DBERR_NOMEMORY:
-    config_report(&conf_ctx, LOG_WARNING, "Out of memory reading networks");
-    ep_network_release(network);
-    break;
-  }
 }
 
 static void
@@ -814,7 +715,6 @@ config_read(config_t *conf)
   int len, valid;
   struct typecount counts = {0, 0};
   ep_config_t *endpoint;
-  ep_ad_t *ad;
   ep_network_t *network;
   char path_buf[1024]; /* more than enough for a socket path */
 
@@ -862,7 +762,7 @@ config_read(config_t *conf)
 	       1023 : len + sizeof("/" DEFAULT_CLIENT_SOCK)] = '\0';
 
       /* Set the local address */
-      if (!ep_addr_set_local(&endpoint->epc_addr, path_buf, 0, 0)) {
+      if (!ep_addr_set_local(&endpoint->epc_addr, path_buf, &conf_ctx)) {
 	config_report(&conf_ctx, LOG_WARNING,
 		      "Unable to set up client port at \"%s\"; trying "
 		      "loopback", path_buf);
@@ -871,34 +771,17 @@ config_read(config_t *conf)
 #endif
 
 	/* Set to the loopback address */
-	if (!ep_addr_set_ipaddr(&endpoint->epc_addr, "127.0.0.1", 0, 0) ||
-	    !ep_addr_set_port(&endpoint->epc_addr, DEFAULT_PORT, 0, 0)) {
+	if (!ep_addr_set_ipaddr(&endpoint->epc_addr, "127.0.0.1", &conf_ctx) ||
+	    !ep_addr_set_port(&endpoint->epc_addr, DEFAULT_PORT, &conf_ctx))
 	  config_report(&conf_ctx, LOG_WARNING,
 			"Unable to create a client port");
-	  endpoint = 0; /* Signal there's no endpoint anymore */
-	}
+	else
+	  ep_config_finish(endpoint, conf, &conf_ctx);
 
 #ifdef AF_LOCAL
-      }
+      } else
+	ep_config_finish(endpoint, conf, &conf_ctx);
 #endif
-
-      /* If there's still an endpoint, add it to the configuration */
-      if (endpoint)
-	switch (hash_add(&conf->cf_endpoints, &endpoint->epc_hashent)) {
-	case DBERR_NONE:
-	  break; /* add successful */
-
-	case DBERR_DUPLICATE:
-	  /* Shouldn't happen, but cover our bases */
-	  config_report(&conf_ctx, LOG_WARNING,
-			"Default client endpoint is a duplicate");
-	  break;
-
-	case DBERR_NOMEMORY:
-	  config_report(&conf_ctx, LOG_WARNING,
-			"Out of memory creating default client endpoint");
-	  break;
-	}
     }
   }
 
@@ -912,55 +795,10 @@ config_read(config_t *conf)
       endpoint->epc_type = ENDPOINT_PEER;
 
       /* Set the default port */
-      if (!ep_addr_set_port(&endpoint->epc_addr, DEFAULT_PORT, 0, 0))
+      if (!ep_addr_set_port(&endpoint->epc_addr, DEFAULT_PORT, &conf_ctx))
 	config_report(&conf_ctx, LOG_WARNING, "Unable to create a peer port");
-      else if (!(ad = ep_ad_create(endpoint)))
-	config_report(&conf_ctx, LOG_WARNING,
-		      "Out of memory creating default endpoint advertisement "
-		      "for default peer endpoint");
-      else {
-	/* Add the endpoint to the configuration */
-	switch (hash_add(&conf->cf_endpoints, &endpoint->epc_hashent)) {
-	case DBERR_NONE:
-	  /* Set up default addressing */
-	  ep_addr_default(&ad->epa_addr, &endpoint->epc_addr);
-
-	  /* Add the advertisement to the configuration */
-	  switch (hash_add(&conf->cf_ads, &ad->epa_hashent)) {
-	  case DBERR_NONE:
-	    /* It was successful; add it to the linked list also */
-	    link_append(&endpoint->epc_ads, &ad->epa_link);
-	    break;
-
-	  case DBERR_DUPLICATE:
-	    /* Shouldn't happen, but cover our bases */
-	    config_report(&conf_ctx, LOG_WARNING,
-			  "Default advertisement for default peer endpoint "
-			  "is a duplicate");
-	    ep_ad_release(ad);
-	    break;
-
-	  case DBERR_NOMEMORY:
-	    config_report(&conf_ctx, LOG_WARNING,
-			  "Out of memory creating default endpoint "
-			  "advertisement for default peer endpoint");
-	    ep_ad_release(ad);
-	    break;
-	  }
-	  break;
-
-	case DBERR_DUPLICATE:
-	  /* Shouldn't happen, but cover our bases */
-	  config_report(&conf_ctx, LOG_WARNING,
-			"Default peer endpoint is a duplicate");
-	  break;
-
-	case DBERR_NOMEMORY:
-	  config_report(&conf_ctx, LOG_WARNING,
-			"Out of memory creating default peer endpoint");
-	  break;
-	}
-      }
+      else if (!ep_config_finish(endpoint, conf, &conf_ctx))
+	ep_config_release(endpoint);
     }
   }
 
@@ -969,26 +807,8 @@ config_read(config_t *conf)
     if (!(network = ep_network_create()))
       config_report(&conf_ctx, LOG_WARNING,
 		    "Out of memory creating default network");
-    else {
-      /* Add the network to the configuration */
-      switch (hash_add(&conf->cf_networks, &network->epn_hashent)) {
-      case DBERR_NONE:
-	break; /* add was successful */
-
-      case DBERR_DUPLICATE:
-	/* Shouldn't happen, but cover our bases */
-	config_report(&conf_ctx, LOG_WARNING,
-		      "Default network is a duplicate");
-	ep_network_release(network);
-	break;
-
-      case DBERR_NOMEMORY:
-	config_report(&conf_ctx, LOG_WARNING,
-		      "Out of memory creating default network");
-	ep_network_release(network);
-	break;
-      }
-    }
+    else if (!ep_network_finish(network, conf, &conf_ctx))
+      ep_network_release(network);
   }
 
   return 1;

@@ -32,6 +32,7 @@
 
 #include "include/alloc.h"
 #include "include/common.h"
+#include "include/configuration.h"
 #include "include/connection.h"
 #include "include/db.h"
 #include "include/endpoint.h"
@@ -45,8 +46,7 @@ static freelist_t networks = FREELIST_INIT(ep_network_t, 0);
 static freelist_t endpoints = FREELIST_INIT(endpoint_t, 0);
 
 int
-ep_addr_set_local(ep_addr_t *addr, const char *path,
-		  yaml_ctx_t *ctx, yaml_node_t *value)
+ep_addr_set_local(ep_addr_t *addr, const char *path, conf_ctx_t *ctx)
 {
 #ifdef AF_LOCAL
   int len, max_len;
@@ -57,9 +57,7 @@ ep_addr_set_local(ep_addr_t *addr, const char *path,
 
   /* Look out for duplications */
   if (addr->ea_flags & (EA_LOCAL | EA_IPADDR | EA_PORT)) {
-    if (ctx)
-      yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-		      "Address has already been set");
+    config_report(ctx, LOG_WARNING, "Address has already been set");
     addr->ea_flags |= EA_INVALID;
     return 0;
   }
@@ -69,19 +67,16 @@ ep_addr_set_local(ep_addr_t *addr, const char *path,
 	     SUN_LEN(&addr->ea_addr.eau_local) - 1);
   len = strlen(path);
   if (len > max_len) {
-    if (ctx)
-      yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-		      "Local address \"%s\" is too long (%d > maximum of %d)",
-		      path, len, max_len);
+    config_report(ctx, LOG_WARNING,
+		  "Local address \"%s\" is too long (%d > maximum of %d)",
+		  path, len, max_len);
     addr->ea_flags |= EA_INVALID;
     return 0;
   }
 
   /* Make sure it's a valid path */
   if (*path != '/' || len <= 2 || path[len - 1] == '/') {
-    if (ctx)
-      yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-		      "Local address \"%s\" is invalid", path);
+    config_report(ctx, LOG_WARNING, "Local address \"%s\" is invalid", path);
     addr->ea_flags |= EA_INVALID;
     return 0;
   }
@@ -94,17 +89,15 @@ ep_addr_set_local(ep_addr_t *addr, const char *path,
 
   return 1;
 #else
-  if (ctx)
-    yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-		    "Local addresses not supported on this system");
+  config_report(ctx, LOG_WARNING,
+		"Local addresses not supported on this system");
   addr->ea_flags |= EA_INVALID;
   return 0;
 #endif
 }
 
 int
-ep_addr_set_ipaddr(ep_addr_t *addr, const char *pres,
-		   yaml_ctx_t *ctx, yaml_node_t *value)
+ep_addr_set_ipaddr(ep_addr_t *addr, const char *pres, conf_ctx_t *ctx)
 {
 #ifndef AF_INET6
   static int inet6_warning = 0;
@@ -117,9 +110,7 @@ ep_addr_set_ipaddr(ep_addr_t *addr, const char *pres,
 
   /* Look out for duplications */
   if (addr->ea_flags & (EA_LOCAL | EA_IPADDR)) {
-    if (ctx)
-      yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-		      "Address has already been set");
+    config_report(ctx, LOG_WARNING, "Address has already been set");
     addr->ea_flags |= EA_INVALID;
     return 0;
   }
@@ -155,25 +146,22 @@ ep_addr_set_ipaddr(ep_addr_t *addr, const char *pres,
   }
 #else
   /* Emit an IPv6 warning only once */
-  if (!inet6_warning && ctx) {
-    yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-		    "IPv6 addresses are not supported by this system");
+  if (!inet6_warning) {
+    config_report(ctx, LOG_WARNING,
+		  "IPv6 addresses are not supported by this system");
     inet6_warning = 1;
   }
 #endif
 
   /* OK, it's an invalid address */
-  if (ctx)
-    yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-		    "Invalid IP address \"%s\"", pres);
+  config_report(ctx, LOG_WARNING, "Invalid IP address \"%s\"", pres);
   addr->ea_flags |= EA_INVALID;
 
   return 0;
 }
 
 int
-ep_addr_set_port(ep_addr_t *addr, int port,
-		 yaml_ctx_t *ctx, yaml_node_t *value)
+ep_addr_set_port(ep_addr_t *addr, int port, conf_ctx_t *ctx)
 {
   /* No warning necessary; it's already been given */
   if (addr->ea_flags & EA_INVALID)
@@ -181,18 +169,14 @@ ep_addr_set_port(ep_addr_t *addr, int port,
 
   /* Look out for duplications */
   if (addr->ea_flags & (EA_LOCAL | EA_PORT)) {
-    if (ctx)
-      yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-		      "Port has already been set");
+    config_report(ctx, LOG_WARNING, "Port has already been set");
     addr->ea_flags |= EA_INVALID;
     return 0;
   }
 
   /* Bounds-check the port number */
   if (port <= 0 || port > 65535) {
-    if (ctx)
-      yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-		      "Port %d out of range (0, 65535]", port);
+    config_report(ctx, LOG_WARNING, "Port %d out of range (0, 65535]", port);
     addr->ea_flags |= EA_INVALID;
     return 0;
   }
@@ -460,6 +444,34 @@ ep_ad_create(ep_config_t *epconf)
   return ad;
 }
 
+int
+ep_ad_finish(ep_ad_t *ad, config_t *conf, conf_ctx_t *ctx)
+{
+  /* Set up default addressing */
+  ep_addr_default(&ad->epa_addr, &ad->epa_config->epc_addr);
+
+  /* Add the advertisement to the configuration */
+  switch (hash_add(&conf->cf_ads, &ad->epa_hashent)) {
+  case DBERR_NONE:
+    /* It was successful; also add it to the endpoint's linked list */
+    link_append(&ad->epa_config->epc_ads, &ad->epa_link);
+    break;
+
+  case DBERR_DUPLICATE:
+    config_report(ctx, LOG_WARNING, "Advertisement is a duplicate");
+    return 0;
+    break; /* not reached */
+
+  case DBERR_NOMEMORY:
+    config_report(ctx, LOG_WARNING,
+		  "Out of memory adding endpoint advertisement");
+    return 0;
+    break; /* not reached */
+  }
+
+  return 1;
+}
+
 void
 ep_ad_release(ep_ad_t *ad)
 {
@@ -489,19 +501,66 @@ ep_config_create(void)
   return config;
 }
 
-void
-ep_config_release_ads(void *obj, void *extra)
+static void
+ep_config_release_ads(ep_ad_t *ad, void *extra)
 {
-  ep_ad_t *ad = obj;
-
   ep_ad_release(ad);
+}
+
+int
+ep_config_finish(ep_config_t *ep_conf, config_t *conf, conf_ctx_t *ctx)
+{
+  ep_ad_t *ad;
+
+  /* Set the default port as needed */
+  if (!(ep_conf->epc_addr.ea_flags & (EA_LOCAL | EA_PORT)))
+    ep_addr_set_port(&ep_conf->epc_addr, DEFAULT_PORT, ctx);
+
+  /* Add the endpoint to the configuration */
+  switch (hash_add(&conf->cf_endpoints, &ep_conf->epc_hashent)) {
+  case DBERR_NONE:
+    break; /* add successful */
+
+  case DBERR_DUPLICATE:
+    config_report(ctx, LOG_WARNING, "Endpoint is a duplicate");
+    return 0;
+    break; /* not reached */
+
+  case DBERR_NOMEMORY:
+    config_report(ctx, LOG_WARNING, "Out of memory reading endpoints");
+    return 0;
+    break; /* not reached */
+  }
+
+  /* Set up the endpoint type */
+  if (ep_conf->epc_addr.ea_flags & EA_LOCAL)
+    ep_conf->epc_type = ENDPOINT_CLIENT;
+  else if (ep_conf->epc_type == ENDPOINT_UNKNOWN)
+    ep_conf->epc_type = ENDPOINT_PEER;
+
+  /* Set up advertisements */
+  if (ep_conf->epc_type == ENDPOINT_CLIENT) {
+    ep_conf->epc_flags |= EP_CONFIG_UNADVERTISED;
+
+    /* Clear any advertisements */
+    link_iter(&ep_conf->epc_ads, (db_iter_t)ep_config_release_ads, 0);
+  } else if (!ep_conf->epc_ads.lh_count) {
+    if (!(ad = ep_ad_create(ep_conf))) {
+      config_report(ctx, LOG_WARNING,
+		    "Out of memory creating default endpoint advertisement");
+      return 1; /* We still succeeded at finishing the endpoint */
+    } else if (!ep_ad_finish(ad, conf, ctx))
+      ep_ad_release(ad);
+  }
+
+  return 1;
 }
 
 void
 ep_config_release(ep_config_t *config)
 {
   /* Release the endpoint advertisements */
-  link_iter(&config->epc_ads, ep_config_release_ads, 0);
+  link_iter(&config->epc_ads, (db_iter_t)ep_config_release_ads, 0);
 
   /* Zero the config */
   ep_config_init(config);
@@ -523,6 +582,31 @@ ep_network_create(void)
   ep_network_init(network);
 
   return network;
+}
+
+int
+ep_network_finish(ep_network_t *network, config_t *conf, conf_ctx_t *ctx)
+{
+  /* Add the network to the configuration */
+  switch (hash_add(&conf->cf_networks, &network->epn_hashent)) {
+  case DBERR_NONE:
+    break; /* add was successful */
+
+  case DBERR_DUPLICATE:
+    config_report(ctx, LOG_WARNING, "Network \"%s\" is a duplicate",
+		  network->epn_name);
+    ep_network_release(network);
+    return 0;
+    break; /* not reached */
+
+  case DBERR_NOMEMORY:
+    config_report(ctx, LOG_WARNING, "Out of memory reading networks");
+    ep_network_release(network);
+    return 0;
+    break; /* not reached */
+  }
+
+  return 1;
 }
 
 void
