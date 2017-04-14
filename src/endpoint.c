@@ -545,11 +545,10 @@ ep_config_finish(ep_config_t *ep_conf, config_t *conf, conf_ctx_t *ctx)
     /* Clear any advertisements */
     link_iter(&ep_conf->epc_ads, (db_iter_t)ep_config_release_ads, 0);
   } else if (!ep_conf->epc_ads.lh_count) {
-    if (!(ad = ep_ad_create(ep_conf))) {
+    if (!(ad = ep_ad_create(ep_conf)))
       config_report(ctx, LOG_WARNING,
 		    "Out of memory creating default endpoint advertisement");
-      return 1; /* We still succeeded at finishing the endpoint */
-    } else if (!ep_ad_finish(ad, conf, ctx))
+    else if (!ep_ad_finish(ad, conf, ctx))
       ep_ad_release(ad);
   }
 
