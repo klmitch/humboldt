@@ -21,7 +21,6 @@
 #include <syslog.h>	/* for LOG_DAEMON */
 #include <uuid.h>	/* for uuid_t */
 
-#include "alloc.h"	/* for flexlist_t */
 #include "common.h"	/* for magic_t */
 
 /** \brief Configuration.
@@ -32,6 +31,7 @@
  */
 typedef struct _config_s config_t;
 
+#include "db.h"		/* for hash_tab_t */
 #include "endpoint.h"	/* for endpoint types; depends on config_t */
 #include "ssl.h"	/* for ssl_conf_t; depends on config_t */
 
@@ -47,8 +47,9 @@ struct _config_s {
   const char   *cf_prog;	/**< The program name */
   uuid_t	cf_uuid;	/**< UUID of Humboldt */
   int		cf_facility;	/**< Syslog facility to log to */
-  flexlist_t	cf_endpoints;	/**< Configured endpoints */
-  flexlist_t	cf_networks;	/**< Configured origination networks */
+  hash_tab_t	cf_endpoints;	/**< Endpoints hash table */
+  hash_tab_t	cf_ads;		/**< Endpoint advertisements hash table */
+  hash_tab_t	cf_networks;	/**< Networks hash table */
   ssl_conf_t   *cf_ssl;		/**< SSL configuration */
 };
 
@@ -87,9 +88,19 @@ struct _config_s {
  * initialized.
  */
 #define CONFIG_INIT()							\
-  {CONFIG_MAGIC, CONFIG_FILE_DEFAULT, DEFAULT_CONFIG, DEFAULT_STATEDIR, \
-      0, {}, LOG_DAEMON, FLEXLIST_INIT(ep_config_t),			\
-      FLEXLIST_INIT(ep_network_t), 0}
+  {									\
+    CONFIG_MAGIC,							\
+    CONFIG_FILE_DEFAULT,						\
+    DEFAULT_CONFIG,							\
+    DEFAULT_STATEDIR,							\
+    0,									\
+    {},									\
+    LOG_DAEMON,								\
+    HASH_TAB_INIT(ep_addr_hash, ep_addr_comp),				\
+    HASH_TAB_INIT(ep_addr_hash, ep_addr_comp),				\
+    HASH_TAB_INIT(db_str_hash, db_str_comp),				\
+    0									\
+  }
 
 /** \brief Debugging enabled.
  *

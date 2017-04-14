@@ -25,7 +25,6 @@
  */
 typedef struct _runtime_s runtime_t;
 
-#include "alloc.h"		/* for flexlist_t */
 #include "common.h"		/* for magic_t */
 #include "configuration.h"	/* for config_t */
 #include "db.h"			/* for link_head_t */

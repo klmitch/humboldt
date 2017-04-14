@@ -25,10 +25,58 @@
 #include "include/log.h"
 #include "include/runtime.h"
 
+static void
+emit_advertisement(ep_ad_t *ad, config_t *conf)
+{
+  char addr_desc[ADDR_DESCRIPTION];
+
+  log_emit(conf, LOG_DEBUG, "      Advertisement: %s%s%s",
+	   ep_addr_describe(&ad->epa_addr, addr_desc, sizeof(addr_desc)),
+	   ad->epa_network[0] ? " Network " : "",
+	   ad->epa_network[0] ? ad->epa_network : "");
+}
+
+static void
+emit_endpoint(ep_config_t *endpoint, config_t *conf)
+{
+  char addr_desc[ADDR_DESCRIPTION];
+
+  log_emit(conf, LOG_DEBUG, "  Endpoint: %s type %s (%s%s%s)",
+	   ep_addr_describe(&endpoint->epc_addr, addr_desc,
+			    sizeof(addr_desc)),
+	   (endpoint->epc_type == ENDPOINT_UNKNOWN ? "unknown" :
+	    (endpoint->epc_type == ENDPOINT_CLIENT ? "client" :
+	     (endpoint->epc_type == ENDPOINT_PEER ? "peer" : "other"))),
+	   (endpoint->epc_flags == 0 ? "no flags" :
+	    (endpoint->epc_flags & EP_CONFIG_INVALID ? "invalid" :
+	     "unadvertised")),
+	   (endpoint->epc_flags & EP_CONFIG_INVALID ?
+	    ((endpoint->epc_flags & EP_CONFIG_UNADVERTISED) ? " " : "") :
+	    ""),
+	   (endpoint->epc_flags ==
+	    (EP_CONFIG_INVALID | EP_CONFIG_UNADVERTISED) ? "unadvertised" :
+	    ""));
+
+  if (!(endpoint->epc_flags & EP_CONFIG_UNADVERTISED)) {
+    log_emit(conf, LOG_DEBUG, "    Advertisements (%d):",
+	     endpoint->epc_ads.lh_count);
+    link_iter(&endpoint->epc_ads, (db_iter_t)emit_advertisement, conf);
+  }
+}
+
+static void
+emit_network(ep_network_t *network, config_t *conf)
+{
+  char addr_desc[ADDR_DESCRIPTION];
+
+  log_emit(conf, LOG_DEBUG, "  Network: %s Name %s",
+	   ep_addr_describe(&network->epn_addr, addr_desc, sizeof(addr_desc)),
+	   network->epn_name ? network->epn_name : "<Public>");
+}
+
 int
 main(int argc, char **argv)
 {
-  char addr_desc[ADDR_DESCRIPTION];
   char uuid_buf[37];
   config_t conf = CONFIG_INIT();
   runtime_t runtime;
@@ -50,54 +98,12 @@ main(int argc, char **argv)
   log_emit(&conf, LOG_DEBUG, "Humboldt node UUID: %s", uuid_buf);
 
   /* How many endpoints have been defined? */
-  log_emit(&conf, LOG_DEBUG, "Endpoints (%d):",
-	   flexlist_count(&conf.cf_endpoints));
-  for (int i = 0; i < flexlist_count(&conf.cf_endpoints); i++) {
-    ep_config_t *endpoint = (ep_config_t *)flexlist_item(&conf.cf_endpoints,
-							 i);
-
-    log_emit(&conf, LOG_DEBUG, "  Endpoint %d: %s type %s (%s%s%s)", i,
-	     ep_addr_describe(&endpoint->epc_addr, addr_desc,
-			      sizeof(addr_desc)),
-	     (endpoint->epc_type == ENDPOINT_UNKNOWN ? "unknown" :
-	      (endpoint->epc_type == ENDPOINT_CLIENT ? "client" :
-	       (endpoint->epc_type == ENDPOINT_PEER ? "peer" : "other"))),
-	     (endpoint->epc_flags == 0 ? "no flags" :
-	      (endpoint->epc_flags & EP_CONFIG_INVALID ? "invalid" :
-	       "unadvertised")),
-	     (endpoint->epc_flags & EP_CONFIG_INVALID ?
-	      ((endpoint->epc_flags & EP_CONFIG_UNADVERTISED) ? " " : "") :
-	      ""),
-	     (endpoint->epc_flags ==
-	      (EP_CONFIG_INVALID | EP_CONFIG_UNADVERTISED) ? "unadvertised" :
-	      ""));
-
-    if (!(endpoint->epc_flags & EP_CONFIG_UNADVERTISED)) {
-      log_emit(&conf, LOG_DEBUG, "    Advertisements (%d):",
-	       flexlist_count(&endpoint->epc_ads));
-      for (int j = 0; j < flexlist_count(&endpoint->epc_ads); j++) {
-	ep_ad_t *ad = (ep_ad_t *)flexlist_item(&endpoint->epc_ads, j);
-
-	log_emit(&conf, LOG_DEBUG, "      Advertisement %d: %s%s%s", j,
-		 ep_addr_describe(&ad->epa_addr, addr_desc, sizeof(addr_desc)),
-		 ad->epa_network[0] ? " Network " : "",
-		 ad->epa_network[0] ? ad->epa_network : "");
-      }
-    }
-  }
+  log_emit(&conf, LOG_DEBUG, "Endpoints (%d):", conf.cf_endpoints.ht_count);
+  hash_iter(&conf.cf_endpoints, (db_iter_t)emit_endpoint, &conf);
 
   /* How many networks have been defined? */
-  log_emit(&conf, LOG_DEBUG, "Networks (%d):",
-	   flexlist_count(&conf.cf_networks));
-  for (int i = 0; i < flexlist_count(&conf.cf_networks); i++) {
-    ep_network_t *network = (ep_network_t *)flexlist_item(&conf.cf_networks,
-							  i);
-
-    log_emit(&conf, LOG_DEBUG, "  Network %d: %s Name %s", i,
-	     ep_addr_describe(&network->epn_addr, addr_desc,
-			      sizeof(addr_desc)),
-	     network->epn_name ? network->epn_name : "<Public>");
-  }
+  log_emit(&conf, LOG_DEBUG, "Networks (%d):", conf.cf_networks.ht_count);
+  hash_iter(&conf.cf_networks, (db_iter_t)emit_network, &conf);
 
   /* Report the SSL configuration */
   if (!conf.cf_ssl)

@@ -36,11 +36,41 @@ handle_sigint(evutil_socket_t signum, short event, runtime_t *runtime)
   event_base_loopexit(runtime->rt_evbase, 0);
 }
 
+struct epcreator {
+  runtime_t    *runtime;
+  int		clients;
+  int		peers;
+  int		total;
+};
+
+static void
+create_endpoint(ep_config_t *epconf, struct epcreator *counts)
+{
+  int tmp;
+
+  /* Create the endpoint */
+  tmp = endpoint_create(counts->runtime, epconf);
+
+  /* Increment the correct counts */
+  counts->total += tmp;
+  switch (epconf->epc_type) {
+  case ENDPOINT_CLIENT:
+    counts->clients += tmp;
+    break;
+
+  case ENDPOINT_PEER:
+    counts->peers += tmp;
+    break;
+
+  default:
+    break;
+  }
+}
+
 int
 initialize_runtime(runtime_t *runtime, config_t *conf)
 {
-  int i, tmp;
-  int clients = 0, peers = 0, total = 0;
+  struct epcreator creator = {runtime, 0, 0, 0};
 
   /* Initialize event logging */
   log_libevent_init(conf);
@@ -63,21 +93,10 @@ initialize_runtime(runtime_t *runtime, config_t *conf)
   link_head_init(&runtime->rt_connections);
 
   /* Open all the endpoints */
-  for (i = 0; i < flexlist_count(&conf->cf_endpoints); i++) {
-    ep_config_t *epconf = (ep_config_t *)flexlist_item(&conf->cf_endpoints, i);
-
-    tmp = endpoint_create(runtime, epconf);
-    total += tmp;
-
-    /* Increment the correct count */
-    if (epconf->epc_type == ENDPOINT_CLIENT)
-      peers += tmp;
-    else if (epconf->epc_type == ENDPOINT_PEER)
-      clients += tmp;
-  }
+  hash_iter(&conf->cf_endpoints, (db_iter_t)create_endpoint, &creator);
 
   log_emit(conf, LOG_INFO, "Opened %d client and %d peer endpoints (%d total)",
-	   clients, peers, total);
+	   creator.clients, creator.peers, creator.total);
 
   /* Set up the SIGINT handler */
   if (!(runtime->rt_inthandle = evsignal_new(runtime->rt_evbase, SIGINT,

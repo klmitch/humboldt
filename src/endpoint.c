@@ -39,6 +39,9 @@
 #include "include/runtime.h"
 #include "include/yaml_util.h"
 
+static freelist_t advertisements = FREELIST_INIT(ep_ad_t, 0);
+static freelist_t configs = FREELIST_INIT(ep_config_t, 0);
+static freelist_t networks = FREELIST_INIT(ep_network_t, 0);
 static freelist_t endpoints = FREELIST_INIT(endpoint_t, 0);
 
 int
@@ -353,33 +356,173 @@ ep_addr_describe(ep_addr_t *addr, char *buf, size_t buflen)
   return buf;
 }
 
-void
-ep_ad_release(ep_ad_t *ad)
+int
+ep_addr_comp(void *key1, void *key2)
 {
-  /* Zero the advertisement */
-  ep_ad_init(ad, 0);
+  int comp;
+  ep_addr_t *addr1 = key1, *addr2 = key2;
 
-  /* Zero the magic number */
-  ad->epa_magic = 0;
+  /* Invalid addresses are indistinguishable and sort before others */
+  if (addr1->ea_flags & EA_INVALID)
+    return (addr2->ea_flags & EA_INVALID) ? 0 : -1;
+  else if (addr2->ea_flags & EA_INVALID)
+    return 1;
+
+  /* Compare address families */
+  if (addr1->ea_addr.eau_addr.sa_family != addr2->ea_addr.eau_addr.sa_family)
+    return (addr1->ea_addr.eau_addr.sa_family -
+	    addr2->ea_addr.eau_addr.sa_family);
+
+  /* OK, same family; compare contents */
+#ifdef AF_LOCAL
+  if (addr1->ea_flags & EA_LOCAL)
+    /* Just compare endpoint names */
+    return strcmp(addr1->ea_addr.eau_local.sun_path,
+		  addr2->ea_addr.eau_local.sun_path);
+#endif
+
+#ifdef AF_INET6
+  /* Is it an IPv6 address? */
+  if (addr1->ea_addr.eau_addr.sa_family == AF_INET6) {
+    if ((comp = memcmp(&addr1->ea_addr.eau_ip6.sin6_addr,
+		       &addr2->ea_addr.eau_ip6.sin6_addr,
+		       sizeof(addr1->ea_addr.eau_ip6.sin6_addr))))
+      return comp;
+
+    /* Addresses are the same, so check ports */
+    return (addr1->ea_addr.eau_ip6.sin6_port -
+	    addr2->ea_addr.eau_ip6.sin6_port);
+  }
+#endif
+
+  /* Compare the IPv4 addresses */
+  if ((comp = memcmp(&addr1->ea_addr.eau_ip4.sin_addr,
+		     &addr2->ea_addr.eau_ip4.sin_addr,
+		     sizeof(addr1->ea_addr.eau_ip4.sin_addr))))
+    return comp;
+
+  /* Addresses are the same, so check ports */
+  return addr1->ea_addr.eau_ip4.sin_port - addr2->ea_addr.eau_ip4.sin_port;
+}
+
+hash_t
+ep_addr_hash(void *key)
+{
+  hash_t hash = HASH_INIT;
+  ep_addr_t *addr = key;
+
+  /* Invalid addresses are essentially zero length */
+  if (addr->ea_flags & EA_INVALID)
+    return hash;
+
+  /* Hash the address family */
+  hash = hash_fnv1a_update(hash, &addr->ea_addr.eau_addr.sa_family,
+			   sizeof(addr->ea_addr.eau_addr.sa_family));
+
+  /* Hash the address itself */
+#ifdef AF_LOCAL
+  if (addr->ea_flags & EA_LOCAL)
+    /* For a local address, hash the path */
+    return hash_fnv1a_update(hash, addr->ea_addr.eau_local.sun_path, -1);
+#endif
+
+#ifdef AF_INET6
+  /* Is it an IPv6 address? */
+  if (addr->ea_addr.eau_addr.sa_family == AF_INET6) {
+    hash = hash_fnv1a_update(hash, &addr->ea_addr.eau_ip6.sin6_addr,
+			     sizeof(addr->ea_addr.eau_ip6.sin6_addr));
+    return hash_fnv1a_update(hash, &addr->ea_addr.eau_ip6.sin6_port,
+			     sizeof(addr->ea_addr.eau_ip6.sin6_port));
+  }
+#endif
+
+  /* Hash the IPv4 address and the port */
+  hash = hash_fnv1a_update(hash, &addr->ea_addr.eau_ip4.sin_addr,
+			   sizeof(addr->ea_addr.eau_ip4.sin_addr));
+  return hash_fnv1a_update(hash, &addr->ea_addr.eau_ip4.sin_port,
+			   sizeof(addr->ea_addr.eau_ip4.sin_port));
+}
+
+ep_ad_t *
+ep_ad_create(ep_config_t *epconf)
+{
+  ep_ad_t *ad;
+
+  common_verify(epconf, EP_CONFIG_MAGIC);
+
+  /* Allocate an advertisement */
+  if (!(ad = alloc(&advertisements)))
+    return 0;
+
+  /* Initialize it */
+  ep_ad_init(ad, epconf);
+
+  return ad;
 }
 
 void
-ep_config_release(ep_config_t *endpoint)
+ep_ad_release(ep_ad_t *ad)
 {
-  int i;
+  /* Remove from the hash table and linked list */
+  hash_remove(&ad->epa_hashent);
+  link_pop(&ad->epa_link);
 
-  /* Release memory associated with the endpoint advertisements */
-  for (i = 0; i < flexlist_count(&endpoint->epc_ads); i++)
-    ep_ad_release((ep_ad_t *)flexlist_item(&endpoint->epc_ads, i));
+  /* Zero the advertisement */
+  ep_ad_init(ad, 0);
 
-  /* Release the ad list */
-  flexlist_release(&endpoint->epc_ads);
+  /* Release the advertisement */
+  release(&advertisements, ad);
+}
+
+ep_config_t *
+ep_config_create(void)
+{
+  ep_config_t *config;
+
+  /* Allocate a config */
+  if (!(config = alloc(&configs)))
+    return 0;
+
+  /* Initialize it */
+  ep_config_init(config);
+
+  return config;
+}
+
+void
+ep_config_release_ads(void *obj, void *extra)
+{
+  ep_ad_t *ad = obj;
+
+  ep_ad_release(ad);
+}
+
+void
+ep_config_release(ep_config_t *config)
+{
+  /* Release the endpoint advertisements */
+  link_iter(&config->epc_ads, ep_config_release_ads, 0);
 
   /* Zero the config */
-  ep_config_init(endpoint);
+  ep_config_init(config);
 
-  /* Zero the magic number */
-  endpoint->epc_magic = 0;
+  /* Release the configuration */
+  release(&configs, config);
+}
+
+ep_network_t *
+ep_network_create(void)
+{
+  ep_network_t *network;
+
+  /* Allocate a network */
+  if (!(network = alloc(&networks)))
+    return 0;
+
+  /* Initialize it */
+  ep_network_init(network);
+
+  return network;
 }
 
 void
@@ -388,8 +531,8 @@ ep_network_release(ep_network_t *network)
   /* Zero the network */
   ep_network_init(network);
 
-  /* Zero the magic number */
-  network->epn_magic = 0;
+  /* Release the network */
+  release(&networks, network);
 }
 
 static void

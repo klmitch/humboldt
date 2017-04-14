@@ -150,9 +150,8 @@ struct _ep_addr_s {
 
 #define NETWORK_LEN	16
 
-#include "alloc.h"		/* for flexlist_t */
 #include "common.h"		/* for magic_t */
-#include "db.h"			/* for link_elem_t */
+#include "db.h"			/* for link_elem_t, hash_t */
 #include "runtime.h"		/* for runtime_t */
 
 /** \brief Endpoint structure.
@@ -184,6 +183,8 @@ struct _endpoint_s {
  */
 struct _ep_ad_s {
   magic_t	epa_magic;	/**< Magic number */
+  hash_ent_t	epa_hashent;	/**< Hash table entry */
+  link_elem_t	epa_link;	/**< Link for config list of advertisements */
   uint32_t	epa_flags;	/**< Advertisement flags */
   ep_addr_t	epa_addr;	/**< Address to advertise */
   char		epa_network[NETWORK_LEN + 1];
@@ -218,14 +219,16 @@ struct _ep_ad_s {
  *				configuration which corresponds to the
  *				advertisement.
  */
-#define ep_ad_init(obj, epconf)			\
-  do {						\
-    ep_ad_t *_epa = (obj);			\
-    _epa->epa_flags = 0;			\
-    ep_addr_init(&_epa->epa_addr);		\
-    _epa->epa_network[0] = '\0';		\
-    _epa->epa_config = (epconf);		\
-    _epa->epa_magic = EP_AD_MAGIC;		\
+#define ep_ad_init(obj, epconf)					\
+  do {								\
+    ep_ad_t *_epa = (obj);					\
+    hash_ent_init(&_epa->epa_hashent, _epa, &_epa->epa_addr);	\
+    link_elem_init(&_epa->epa_link, _epa);			\
+    _epa->epa_flags = 0;					\
+    ep_addr_init(&_epa->epa_addr);				\
+    _epa->epa_network[0] = '\0';				\
+    _epa->epa_config = (epconf);				\
+    _epa->epa_magic = EP_AD_MAGIC;				\
   } while (0)
 
 /** \brief Endpoint configuration structure.
@@ -235,10 +238,11 @@ struct _ep_ad_s {
  */
 struct _ep_config_s {
   magic_t	epc_magic;	/**< Magic number */
+  hash_ent_t	epc_hashent;	/**< Hash table entry */
   uint32_t	epc_flags;	/**< Endpoint flags */
   ep_addr_t	epc_addr;	/**< Address to listen on */
   ep_type_t	epc_type;	/**< Address type: client or peer */
-  flexlist_t	epc_ads;	/**< List of advertisements */
+  link_head_t	epc_ads;	/**< Linked list of advertisements */
 };
 
 /** \brief Endpoint configuration magic number.
@@ -272,14 +276,15 @@ struct _ep_config_s {
  * \param[in,out]	obj	A pointer to the endpoint
  *				configuration.
  */
-#define ep_config_init(obj)			\
-  do {						\
-    ep_config_t *_epc = (obj);			\
-    _epc->epc_flags = 0;			\
-    ep_addr_init(&_epc->epc_addr);		\
-    _epc->epc_type = ENDPOINT_UNKNOWN;		\
-    flexlist_init(&_epc->epc_ads, ep_ad_t);	\
-    _epc->epc_magic = EP_CONFIG_MAGIC;		\
+#define ep_config_init(obj)					\
+  do {								\
+    ep_config_t *_epc = (obj);					\
+    hash_ent_init(&_epc->epc_hashent, _epc, &_epc->epc_addr);	\
+    _epc->epc_flags = 0;					\
+    ep_addr_init(&_epc->epc_addr);				\
+    _epc->epc_type = ENDPOINT_UNKNOWN;				\
+    link_head_init(&_epc->epc_ads);				\
+    _epc->epc_magic = EP_CONFIG_MAGIC;				\
   } while (0)
 
 /** \brief Endpoint network structure.
@@ -288,6 +293,7 @@ struct _ep_config_s {
  */
 struct _ep_network_s {
   magic_t	epn_magic;	/**< Magic number */
+  hash_ent_t	epn_hashent;	/**< Hash table entry */
   uint32_t	epn_flags;	/**< Network flags */
   char		epn_name[NETWORK_LEN + 1];
 				/**< Network name */
@@ -315,13 +321,14 @@ struct _ep_network_s {
  * Initialize an endpoint network structure.  This initializes the
  * address and sets the network name to \c NULL.
  */
-#define ep_network_init(obj)			\
-  do {						\
-    ep_network_t *_epn = (obj);			\
-    _epn->epn_flags = 0;			\
-    _epn->epn_name[0] = '\0';			\
-    ep_addr_init(&_epn->epn_addr);		\
-    _epn->epn_magic = EP_NETWORK_MAGIC;		\
+#define ep_network_init(obj)					\
+  do {								\
+    ep_network_t *_epn = (obj);					\
+    hash_ent_init(&_epn->epn_hashent, _epn, &_epn->epn_name);	\
+    _epn->epn_flags = 0;					\
+    _epn->epn_name[0] = '\0';					\
+    ep_addr_init(&_epn->epn_addr);				\
+    _epn->epn_magic = EP_NETWORK_MAGIC;				\
   } while (0)
 
 /* Note: included from configuration.h so try to avoid include loop */
@@ -421,6 +428,44 @@ const char *ep_addr_describe(ep_addr_t *addr, char *buf, size_t buflen);
  */
 #define ADDR_DESCRIPTION	256
 
+/** \brief Compare addresses.
+ *
+ * This is a #db_comp_t compatible function for comparing two
+ * #ep_addr_t objects.
+ *
+ * \param[in]		key1	The first address to compare.
+ * \param[in]		key2	The second address to compare.
+ *
+ * \return	A value less than, equal to, or greater than 0
+ *		depending on whether \p key1 is less than, equal to,
+ *		or greater than \p key2.
+ */
+int ep_addr_comp(void *key1, void *key2);
+
+/** \brief Hash an address.
+ *
+ * This is a #hash_func_t compatible function for hashing an
+ * #ep_addr_t object.
+ *
+ * \param[in]		key	The address object to generate a hash
+ *				for.
+ *
+ * \return	The hash of the address.
+ */
+hash_t ep_addr_hash(void *key);
+
+/** \brief Create endpoint advertisement.
+ *
+ * Create an initialized endpoint advertisement structure.
+ *
+ * \param[in]		epconf	A pointer to the endpoint
+ *				configuration which corresponds to the
+ *				advertisement.
+ *
+ * \return	An initialized endpoint advertisement.
+ */
+ep_ad_t *ep_ad_create(ep_config_t *epconf);
+
 /** \brief Release endpoint advertisement.
  *
  * This function ensures that all memory allocated to represent a
@@ -431,16 +476,41 @@ const char *ep_addr_describe(ep_addr_t *addr, char *buf, size_t buflen);
  */
 void ep_ad_release(ep_ad_t *ad);
 
+/** \brief Create endpoint configuration.
+ *
+ * Create an initialized endpoint configuration structure.
+ *
+ * \return	An initialized endpoint configuration.
+ */
+ep_config_t *ep_config_create(void);
+
+/** \brief Release endpoint configuration advertisements.
+ *
+ * This is a function compatible with #db_iter_t which can be used to
+ * release endpoint advertisements in a linked list.
+ *
+ * \param[in,out]	obj	The advertisement to release.
+ * \param[in]		extra	Extra data.  Ignored.
+ */
+void ep_config_release_ads(void *obj, void *extra);
+
 /** \brief Release endpoint configuration.
  *
  * This function ensures that all memory allocated to represent a
  * given endpoint configuration is released.
  *
- * \param[in,out]	endpoint
- *				The endpoint configuration to
+ * \param[in,out]	config	The endpoint configuration to
  *				release.
  */
-void ep_config_release(ep_config_t *endpoint);
+void ep_config_release(ep_config_t *config);
+
+/** \brief Create endpoint network.
+ *
+ * Create an initialized endpoint network structure.
+ *
+ * \return	An initialized endpoint network.
+ */
+ep_network_t *ep_network_create(void);
 
 /** \brief Release endpoint network.
  *
