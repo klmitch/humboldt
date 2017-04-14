@@ -169,12 +169,14 @@ struct _link_elem_s {
     common_verify(_le, LINK_ELEM_MAGIC);		\
     if (_le->le_prev)					\
       _le->le_prev->le_next = _le->le_next;		\
+    else if (_le->le_head)				\
+      _le->le_head->lh_first = _le->le_next;		\
     if (_le->le_next)					\
       _le->le_next->le_prev = _le->le_prev;		\
-    if (_le->le_head && !--_le->le_head->lh_count) {	\
-      _le->le_head->lh_first = 0;			\
-      _le->le_head->lh_last = 0;			\
-    }							\
+    else if (_le->le_head)				\
+      _le->le_head->lh_last = _le->le_prev;		\
+    if (_le->le_head)					\
+      _le->le_head->lh_count--;				\
     _le->le_head = 0;					\
   } while (0)
 
@@ -185,7 +187,7 @@ struct _link_elem_s {
  *
  * \param[in]		elem	The element to check.
  *
- * \returns	A true value if the element is linked, false
+ * \return	A true value if the element is linked, false
  *		otherwise.
  */
 #define linked(elem)	((elem)->le_head)
