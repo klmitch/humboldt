@@ -24,6 +24,7 @@
 #include "include/configuration.h"
 #include "include/log.h"
 #include "include/runtime.h"
+#include "include/ssl.h"
 
 static void
 emit_advertisement(ep_ad_t *ad, config_t *conf)
