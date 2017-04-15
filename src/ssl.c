@@ -25,46 +25,20 @@
 #include "include/ssl.h"
 #include "include/yaml_util.h"
 
-/*
-  Notes:
-
-  SSL_CTX_set_cipher_list - sets cipher list (duh)
-
-  SSL_CTX_set_options - sets options; options of interest:
-  * SSL_OP_NO_SSLv2
-  * SSL_OP_NO_SSLv3
-
-  SSL_CTX_set_session_cache_mode - use to enable the session cache
-  * SSL_SESS_CACHE_BOTH - enable both client and server caching
-
-  SSL_CTX_set_session_id_context - sets the context for session caching
-
-  SSL_CTX_set_verify - control certificate verification
-  * SSL_VERIFY_PEER - request peer certificate
-  * SSL_VERIFY_FAIL_IF_NO_PEER_CERT - require peer certificate
-
-  SSL_CTX_set_verify_depth - set certificate verification depth
-
-  SSL_CTX_use_certificate_chain_file - set certificate chain file
-
-  SSL_CTX_use_PrivateKey_file - set private key file
-
- */
-
 #ifndef HAVE_OPENSSL
 
 void
 ssl_conf_processor(const char *key, config_t *conf, yaml_ctx_t *ctx,
 		   yaml_node_t *value)
 {
+  conf_ctx_t conf_ctx = CONF_CTX_YAML(ctx, value);
   static int ssl_warning = 0;
 
   common_verify(conf, CONFIG_MAGIC);
 
   /* Emit a warning about TLS being unavailable */
   if (!ssl_warning) {
-    yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-		    "TLS support is not enabled.");
+    config_report(&conf_ctx, LOG_WARNING, "TLS support is not enabled.");
     ssl_warning = 1;
   }
 }
@@ -175,6 +149,7 @@ static void
 proc_cafile(const char *key, ssl_conf_t *conf, yaml_ctx_t *ctx,
 	    yaml_node_t *value)
 {
+  conf_ctx_t conf_ctx = CONF_CTX_YAML(ctx, value);
   const char *filename;
 
   common_verify(conf, SSL_CONF_MAGIC);
@@ -185,14 +160,14 @@ proc_cafile(const char *key, ssl_conf_t *conf, yaml_ctx_t *ctx,
 
   /* Copy the filename into the configuration structure */
   if (!(conf->sc_cafile = strdup(filename)))
-    yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-		    "Out of memory reading string");
+    config_report(&conf_ctx, LOG_WARNING, "Out of memory reading string");
 }
 
 static void
 proc_capath(const char *key, ssl_conf_t *conf, yaml_ctx_t *ctx,
 	    yaml_node_t *value)
 {
+  conf_ctx_t conf_ctx = CONF_CTX_YAML(ctx, value);
   const char *dirname;
 
   common_verify(conf, SSL_CONF_MAGIC);
@@ -203,14 +178,14 @@ proc_capath(const char *key, ssl_conf_t *conf, yaml_ctx_t *ctx,
 
   /* Copy the filename into the configuration structure */
   if (!(conf->sc_capath = strdup(dirname)))
-    yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-		    "Out of memory reading string");
+    config_report(&conf_ctx, LOG_WARNING, "Out of memory reading string");
 }
 
 static void
 proc_cert_chain(const char *key, ssl_conf_t *conf, yaml_ctx_t *ctx,
 		yaml_node_t *value)
 {
+  conf_ctx_t conf_ctx = CONF_CTX_YAML(ctx, value);
   const char *filename;
 
   common_verify(conf, SSL_CONF_MAGIC);
@@ -221,14 +196,14 @@ proc_cert_chain(const char *key, ssl_conf_t *conf, yaml_ctx_t *ctx,
 
   /* Copy the filename into the configuration structure */
   if (!(conf->sc_cert_chain = strdup(filename)))
-    yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-		    "Out of memory reading string");
+    config_report(&conf_ctx, LOG_WARNING, "Out of memory reading string");
 }
 
 static void
 proc_ciphers(const char *key, ssl_conf_t *conf, yaml_ctx_t *ctx,
 	     yaml_node_t *value)
 {
+  conf_ctx_t conf_ctx = CONF_CTX_YAML(ctx, value);
   const char *ciphers;
 
   common_verify(conf, SSL_CONF_MAGIC);
@@ -239,14 +214,14 @@ proc_ciphers(const char *key, ssl_conf_t *conf, yaml_ctx_t *ctx,
 
   /* Copy the filename into the configuration structure */
   if (!(conf->sc_ciphers = strdup(ciphers)))
-    yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-		    "Out of memory reading string");
+    config_report(&conf_ctx, LOG_WARNING, "Out of memory reading string");
 }
 
 static void
 proc_private_key(const char *key, ssl_conf_t *conf, yaml_ctx_t *ctx,
 		 yaml_node_t *value)
 {
+  conf_ctx_t conf_ctx = CONF_CTX_YAML(ctx, value);
   const char *filename;
 
   common_verify(conf, SSL_CONF_MAGIC);
@@ -257,8 +232,7 @@ proc_private_key(const char *key, ssl_conf_t *conf, yaml_ctx_t *ctx,
 
   /* Copy the filename into the configuration structure */
   if (!(conf->sc_private_key = strdup(filename)))
-    yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-		    "Out of memory reading string");
+    config_report(&conf_ctx, LOG_WARNING, "Out of memory reading string");
 }
 
 static mapkeys_t ssl_options[] = {
@@ -273,14 +247,15 @@ void
 ssl_conf_processor(const char *key, config_t *conf, yaml_ctx_t *ctx,
 		   yaml_node_t *value)
 {
+  conf_ctx_t conf_ctx = CONF_CTX_YAML(ctx, value);
   ssl_conf_t *ssl_conf;
 
   common_verify(conf, CONFIG_MAGIC);
 
   /* Allocate a configuration structure */
   if (!(ssl_conf = malloc(sizeof(ssl_conf_t)))) {
-    yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-		    "Out of memory reading TLS configuration");
+    config_report(&conf_ctx, LOG_WARNING,
+		  "Out of memory reading TLS configuration");
     return;
   }
 
@@ -298,19 +273,19 @@ ssl_conf_processor(const char *key, config_t *conf, yaml_ctx_t *ctx,
 
   /* Do we have what we need? */
   if (!ssl_conf->sc_cert_chain || !ssl_conf->sc_private_key) {
-    yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-		    "Not configuring TLS: missing configuration for %s%s%s",
-		    ssl_conf->sc_cert_chain ? "" : "cert_chain",
-		    !ssl_conf->sc_cert_chain && !ssl_conf->sc_private_key ?
-		    " and " : "",
-		    ssl_conf->sc_private_key ? "" : "private_key");
+    config_report(&conf_ctx, LOG_WARNING,
+		  "Not configuring TLS: missing configuration for %s%s%s",
+		  ssl_conf->sc_cert_chain ? "" : "cert_chain",
+		  !ssl_conf->sc_cert_chain && !ssl_conf->sc_private_key ?
+		  " and " : "",
+		  ssl_conf->sc_private_key ? "" : "private_key");
     ssl_conf_free(ssl_conf);
     return;
   } else if (!ssl_conf->sc_cafile && !ssl_conf->sc_capath) {
-    yaml_ctx_report(ctx, &value->start_mark, LOG_WARNING,
-		    "Not configuring TLS: missing configuration for "
-		    "peer certificate verification; provide either "
-		    "cafile or capath (or both)");
+    config_report(&conf_ctx, LOG_WARNING,
+		  "Not configuring TLS: missing configuration for "
+		  "peer certificate verification; provide either "
+		  "cafile or capath (or both)");
     ssl_conf_free(ssl_conf);
     return;
   }
