@@ -20,6 +20,7 @@
 #include <errno.h>
 #include <event2/listener.h>
 #include <event2/util.h>
+#include <netinet/in.h>
 #include <stdint.h>
 #include <string.h>
 #include <syslog.h>
@@ -36,6 +37,7 @@
 #include "include/connection.h"
 #include "include/db.h"
 #include "include/endpoint.h"
+#include "include/interfaces.h"
 #include "include/log.h"
 #include "include/runtime.h"
 #include "include/yaml_util.h"
@@ -482,6 +484,102 @@ ep_config_create(void)
   return config;
 }
 
+static int
+ep_config_telescope(ep_config_t *ep_conf, config_t *conf, conf_ctx_t *ctx,
+		    int family)
+{
+  uint16_t port = 0;
+  link_elem_t *if_elem, *ad_elem;
+  interface_t *iface;
+  ep_config_t *new_conf;
+  ep_ad_t *ad, *new_ad;
+
+  /* First, make sure we have the interfaces information */
+  if (!conf->cf_interfaces && !(conf->cf_interfaces = interfaces_get())) {
+    config_report(ctx, LOG_WARNING, "Unable to get system interfaces");
+    return 0;
+  } else if (!conf->cf_interfaces->ifs_interfaces.lh_count) {
+    config_report(ctx, LOG_WARNING, "No local system interfaces");
+    return 0;
+  }
+
+  /* Get the port, if set */
+  if (ep_conf->epc_addr.ea_flags & EA_PORT) {
+#ifdef AF_INET6
+    if (ep_conf->epc_addr.ea_addr.eau_addr.sa_family == AF_INET6)
+      port = ep_conf->epc_addr.ea_addr.eau_ip6.sin6_port;
+    else
+#endif
+      port = ep_conf->epc_addr.ea_addr.eau_ip4.sin_port;
+  }
+
+  /* Iterate through the list by hand */
+  for (if_elem = conf->cf_interfaces->ifs_interfaces.lh_first; if_elem;
+       if_elem = if_elem->le_next) {
+    /* Get the interface */
+    iface = if_elem->le_obj;
+
+    /* Skip interfaces that aren't in the desired family */
+    if (family && iface->if_addr.ea_addr.eau_addr.sa_family != family)
+      continue;
+
+    /* Get a new configuration */
+    if (!(new_conf = ep_config_create())) {
+      config_report(ctx, LOG_WARNING, "Out of memory telescoping endpoint");
+      continue;
+    }
+
+    /* Copy over important information */
+    new_conf->epc_flags = ep_conf->epc_flags;
+    new_conf->epc_type = ep_conf->epc_type;
+
+    /* OK, now we set up the address */
+    ep_addr_default(&new_conf->epc_addr, &iface->if_addr);
+
+    /* Copy over the port */
+    if (ep_conf->epc_addr.ea_flags & EA_PORT) {
+      if (new_conf->epc_addr.ea_addr.eau_addr.sa_family == AF_INET)
+	new_conf->epc_addr.ea_addr.eau_ip4.sin_port = port;
+#ifdef AF_INET6
+      else if (new_conf->epc_addr.ea_addr.eau_addr.sa_family == AF_INET6)
+	new_conf->epc_addr.ea_addr.eau_ip6.sin6_port = port;
+#endif
+      new_conf->epc_addr.ea_flags |= EA_PORT;
+    }
+
+    /* Copy the advertisements */
+    for (ad_elem = ep_conf->epc_ads.lh_first; ad_elem;
+	 ad_elem = ad_elem->le_next) {
+      /* Get the advertisement */
+      ad = ad_elem->le_obj;
+
+      /* Create a new advertisement */
+      if (!(new_ad = ep_ad_create(new_conf))) {
+	config_report(ctx, LOG_WARNING, "Out of memory telescoping endpoint");
+	continue;
+      }
+
+      /* Copy over important information */
+      new_ad->epa_flags = ad->epa_flags;
+      new_ad->epa_addr = ad->epa_addr;
+      memcpy(&new_ad->epa_network, &ad->epa_network, sizeof(ad->epa_network));
+
+      /* Finish the new advertisement */
+      if (!ep_ad_finish(new_ad, conf, ctx))
+	ep_ad_release(new_ad);
+    }
+
+    /* Finish the new endpoint */
+    if (!ep_config_finish(new_conf, conf, ctx))
+      ep_config_release(new_conf);
+  }
+
+  /* Release the original configuration that we've telescoped */
+  ep_config_release(ep_conf);
+
+  return 1;
+}
+
 static void
 ep_config_release_ads(ep_ad_t *ad, void *extra)
 {
@@ -493,6 +591,21 @@ ep_config_finish(ep_config_t *ep_conf, config_t *conf, conf_ctx_t *ctx)
 {
   ep_ad_t *ad;
   link_elem_t *elem;
+
+  /* Check if we need to multiply our configs */
+  if (!(ep_conf->epc_addr.ea_flags & (EA_LOCAL | EA_IPADDR)))
+    return ep_config_telescope(ep_conf, conf, ctx, 0);
+  else if (ep_conf->epc_addr.ea_flags & EA_IPADDR) {
+    if (ep_conf->epc_addr.ea_addr.eau_addr.sa_family == AF_INET &&
+	ep_conf->epc_addr.ea_addr.eau_ip4.sin_addr.s_addr == INADDR_ANY)
+      return ep_config_telescope(ep_conf, conf, ctx, AF_INET);
+#ifdef AF_INET6
+    else if (ep_conf->epc_addr.ea_addr.eau_addr.sa_family == AF_INET6 &&
+	     IN6_IS_ADDR_UNSPECIFIED(&ep_conf->epc_addr.ea_addr
+				     .eau_ip6.sin6_addr))
+      return ep_config_telescope(ep_conf, conf, ctx, AF_INET6);
+#endif
+  }
 
   /* Set the default port as needed */
   if (!(ep_conf->epc_addr.ea_flags & (EA_LOCAL | EA_PORT)))

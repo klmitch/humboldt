@@ -75,6 +75,9 @@ dnl Checks for compiler characteristics
 dnl Checks for library functions
 AX_FUNC_GETOPT_LONG
 AC_CHECK_FUNCS([vsyslog])
+AC_CHECK_FUNCS([getifaddrs],, [
+  AC_ERROR([no way to get interface addresses])
+])
 
 dnl Checks for system services
 

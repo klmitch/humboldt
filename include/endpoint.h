@@ -502,6 +502,12 @@ ep_config_t *ep_config_create(void);
  * information is complete and add the configuration to the
  * appropriate tracking data structures.
  *
+ * \note	In the case of a telescoping endpoint (one with no
+ *		address or the unspecified address set), this routine
+ *		may allocate additional endpoints and release the one
+ *		it was called with.  Therefore, callers should not
+ *		reference \p ep_conf after this function returns.
+ *
  * \param[in,out]	ep_conf	The endpoint configuration.
  * \param[in,out]	conf	The configuration structure.
  * \param[in]		ctx	The configuration context.

@@ -51,6 +51,7 @@ typedef enum _conf_ctx_flavor_e {
 
 #include "db.h"		/* for hash_tab_t */
 #include "endpoint.h"	/* for endpoint types; depends on config_t */
+#include "interfaces.h"	/* for interfaces_t */
 #include "ssl.h"	/* for ssl_conf_t; depends on config_t */
 #include "yaml_util.h"	/* for yaml_ctx_t, yaml_mark_t */
 
@@ -126,6 +127,7 @@ struct _config_s {
   hash_tab_t	cf_ads;		/**< Endpoint advertisements hash table */
   hash_tab_t	cf_networks;	/**< Networks hash table */
   ssl_conf_t   *cf_ssl;		/**< SSL configuration */
+  interfaces_t *cf_interfaces;	/**< Cached interface information */
 };
 
 /** \brief Configuration magic number.
@@ -174,6 +176,7 @@ struct _config_s {
     HASH_TAB_INIT(ep_addr_hash, ep_addr_comp),				\
     HASH_TAB_INIT(ep_addr_hash, ep_addr_comp),				\
     HASH_TAB_INIT(db_str_hash, db_str_comp),				\
+    0,									\
     0									\
   }
 

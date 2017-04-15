@@ -39,6 +39,7 @@ humboldt_SOURCES = \
 	include/connection.h \
 	include/db.h \
 	include/endpoint.h \
+	include/interfaces.h \
 	include/log.h \
 	include/protocol.h \
 	include/runtime.h \
@@ -49,6 +50,7 @@ humboldt_SOURCES = \
 	src/connection.c \
 	src/db.c \
 	src/endpoint.c \
+	src/interfaces.c \
 	src/log.c \
 	src/main.c \
 	src/protocol.c \

@@ -29,6 +29,7 @@
 #include "include/common.h"
 #include "include/configuration.h"
 #include "include/endpoint.h"
+#include "include/interfaces.h"
 #include "include/log.h"
 #include "include/ssl.h"
 #include "include/yaml_util.h"
@@ -809,6 +810,12 @@ config_read(config_t *conf)
 		    "Out of memory creating default network");
     else if (!ep_network_finish(network, conf, &conf_ctx))
       ep_network_release(network);
+  }
+
+  /* Clean up cached interfaces information */
+  if (conf->cf_interfaces) {
+    interfaces_free(conf->cf_interfaces);
+    conf->cf_interfaces = 0;
   }
 
   return 1;
