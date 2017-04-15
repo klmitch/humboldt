@@ -257,13 +257,22 @@ void yaml_proc_sequence(yaml_ctx_t *ctx, yaml_node_t *seq,
  *
  * \param[in]		ctx	The YAML file context.
  * \param[in]		seq	A YAML sequence node.
+ * \param[in]		proc	The processor routine for the items in
+ *				the mapping that aren't listed in \p
+ *				keys.  May be \c NULL.  Must be
+ *				provided if \p keys is \c NULL or \p
+ *				keycnt is 0.
  * \param[in]		keys	A sorted list of #mapkeys_t values
- *				mapping keys to processors.
- * \param[in]		keycnt	The number of keys in \p keys.
+ *				mapping keys to processors.  May be \c
+ *				NULL.  Must be provided if \p proc is
+ *				\c NULL.
+ * \param[in]		keycnt	The number of keys in \p keys.  May be
+ *				0.  Must be provided if \p keys is
+ *				provided.
  * \param[in,out]	dest	A pointer to the object to contain the
  *				processed value.
  */
-void yaml_proc_mapping(yaml_ctx_t *ctx, yaml_node_t *map,
+void yaml_proc_mapping(yaml_ctx_t *ctx, yaml_node_t *map, mapproc_t proc,
 		       mapkeys_t *keys, size_t keycnt, void *dest);
 
 /** \brief Get information from a scalar node.

@@ -16,6 +16,7 @@
 
 #include <config.h>
 
+#include <assert.h>
 #include <errno.h>
 #include <limits.h>
 #include <stdarg.h>
@@ -125,23 +126,29 @@ mapping_key_compare(const char *key, const mapkeys_t *member)
 }
 
 static void
-process_mapping_key(mapkeys_t *keys, size_t keycnt,
+process_mapping_key(mapproc_t proc, mapkeys_t *keys, size_t keycnt,
 		    const char *key, void *dest,
 		    yaml_ctx_t *ctx, yaml_node_t *value,
 		    yaml_mark_t *key_mark)
 {
-  mapkeys_t *result;
+  mapkeys_t *result = 0;
 
-  if (!(result = (mapkeys_t *)bsearch((const void *)key, (const void *)keys,
-				      keycnt, sizeof(mapkeys_t),
-				      (compare_t)mapping_key_compare))) {
-    yaml_ctx_report(ctx, key_mark, LOG_WARNING,
-		    "Ignoring unknown key \"%s\"", key);
-    return;
+  /* At least one of proc or keys and keycnt must be provided */
+  assert(proc || (keys && keycnt));
+
+  /* Only search the key space if we have keys */
+  if (keys && keycnt) {
+    if (!(result = bsearch((const void *)key, (const void *)keys,
+			   keycnt, sizeof(mapkeys_t),
+			   (compare_t)mapping_key_compare)) && !proc) {
+      yaml_ctx_report(ctx, key_mark, LOG_WARNING,
+		      "Ignoring unknown key \"%s\"", key);
+      return;
+    }
   }
 
   yaml_ctx_path_push_key(ctx, key);
-  result->mk_proc(key, dest, ctx, value);
+  (result ? result->mk_proc : proc)(key, dest, ctx, value);
   yaml_ctx_path_pop(ctx);
 }
 
@@ -193,9 +200,10 @@ yaml_proc_sequence(yaml_ctx_t *ctx, yaml_node_t *seq,
 }
 
 void
-yaml_proc_mapping(yaml_ctx_t *ctx, yaml_node_t *map,
-		    mapkeys_t *keys, size_t keycnt, void *dest)
+yaml_proc_mapping(yaml_ctx_t *ctx, yaml_node_t *map, mapproc_t proc,
+		  mapkeys_t *keys, size_t keycnt, void *dest)
 {
+  node_info_t info;
   yaml_node_t *key, *value;
   yaml_node_pair_t *cursor;
 
@@ -216,15 +224,12 @@ yaml_proc_mapping(yaml_ctx_t *ctx, yaml_node_t *map,
        cursor < map->data.mapping.pairs.top; cursor++) {
     /* Get the key node and make sure it makes sense */
     key = yaml_document_get_node(&ctx->yc_document, cursor->key);
-    if (key->type != YAML_SCALAR_NODE) {
-      yaml_ctx_report(ctx, &key->start_mark, LOG_WARNING,
-		      "Expected scalar key node, found %s node",
-		      node_type(key));
+    if (!yaml_get_scalar(ctx, key, &info))
       continue;
-    } else if (strcmp((const char *)key->tag, YAML_STR_TAG)) {
+    else if (info.ni_type != NODE_STR_TAG) {
       yaml_ctx_report(ctx, &key->start_mark, LOG_WARNING,
 		      "Expected key node with tag \"" YAML_STR_TAG
-		      "\", got tag \"%s\"", key->tag);
+		      "\", got tag \"%s\"", info.ni_tag);
       continue;
     }
 
@@ -232,7 +237,8 @@ yaml_proc_mapping(yaml_ctx_t *ctx, yaml_node_t *map,
     value = yaml_document_get_node(&ctx->yc_document, cursor->value);
 
     /* Look up and invoke the processor */
-    process_mapping_key(keys, keycnt, (const char *)key->data.scalar.value,
+    process_mapping_key(proc, keys, keycnt,
+			(const char *)info.ni_data.nid_str.nids_value,
 			dest, ctx, value, &key->start_mark);
   }
 }
@@ -474,7 +480,7 @@ yaml_file_mapping(config_t *conf, const char *filename, FILE *stream,
       dest = nextdoc(&ctx, dest);
 
     /* Process the node as a mapping */
-    yaml_proc_mapping(&ctx, root, keys, keycnt, dest);
+    yaml_proc_mapping(&ctx, root, 0, keys, keycnt, dest);
 
     /* Clean up the document */
     yaml_document_delete(&ctx.yc_document);

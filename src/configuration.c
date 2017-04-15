@@ -327,7 +327,7 @@ proc_endpoint_ad(int idx, struct epconfig *epc, yaml_ctx_t *ctx,
 
   /* Process the configuration */
   if (value->type == YAML_MAPPING_NODE)
-    yaml_proc_mapping(ctx, value, ad_config, list_count(ad_config),
+    yaml_proc_mapping(ctx, value, 0, ad_config, list_count(ad_config),
 		      (void *)ad);
   else if (yaml_get_str(ctx, value, &network, &netlen, ALLOW_NULL)) {
     if (network) {
@@ -459,7 +459,7 @@ proc_endpoint(int idx, config_t *conf, yaml_ctx_t *ctx, yaml_node_t *value)
   }
 
   /* Process the configuration */
-  yaml_proc_mapping(ctx, value,
+  yaml_proc_mapping(ctx, value, 0,
 		    endpoint_config, list_count(endpoint_config),
 		    (void *)&epc);
 
@@ -574,7 +574,7 @@ proc_network(int idx, config_t *conf, yaml_ctx_t *ctx, yaml_node_t *value)
 
   /* Process the configuration */
   if (value->type == YAML_MAPPING_NODE)
-    yaml_proc_mapping(ctx, value, network_config,
+    yaml_proc_mapping(ctx, value, 0, network_config,
 		      list_count(network_config), (void *)network);
   else if (yaml_get_str(ctx, value, &name, 0, ALLOW_NULL)) {
     if (name) {

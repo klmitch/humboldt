@@ -293,7 +293,7 @@ ssl_conf_processor(const char *key, config_t *conf, yaml_ctx_t *ctx,
   ssl_conf->sc_magic = SSL_CONF_MAGIC;
 
   /* Process the configuration */
-  yaml_proc_mapping(ctx, value, ssl_options, list_count(ssl_options),
+  yaml_proc_mapping(ctx, value, 0, ssl_options, list_count(ssl_options),
 		    (void *)ssl_conf);
 
   /* Do we have what we need? */
