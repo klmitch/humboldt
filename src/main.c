@@ -24,6 +24,7 @@
 #include "include/configuration.h"
 #include "include/log.h"
 #include "include/runtime.h"
+#include "include/sasl_util.h"
 #include "include/ssl.h"
 
 static void
@@ -75,6 +76,13 @@ emit_network(ep_network_t *network, config_t *conf)
 	   network->epn_name ? network->epn_name : "<Public>");
 }
 
+static void
+emit_sasl_option(sasl_option_t *option, config_t *conf)
+{
+  log_emit(conf, LOG_DEBUG, "  Option %s: \"%s\" (%zu)",
+	   option->sao_option, option->sao_value, option->sao_vallen);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -105,6 +113,14 @@ main(int argc, char **argv)
   /* How many networks have been defined? */
   log_emit(&conf, LOG_DEBUG, "Networks (%d):", conf.cf_networks.ht_count);
   hash_iter(&conf.cf_networks, (db_iter_t)emit_network, &conf);
+
+  /* Report the SASL configuration */
+  if (!conf.cf_sasl)
+    log_emit(&conf, LOG_DEBUG, "SASL not configured");
+  else {
+    log_emit(&conf, LOG_DEBUG, "SASL configuration:");
+    hash_iter(&conf.cf_sasl->sac_options, (db_iter_t)emit_sasl_option, &conf);
+  }
 
   /* Report the SSL configuration */
   if (!conf.cf_ssl)

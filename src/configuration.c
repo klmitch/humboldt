@@ -681,6 +681,7 @@ static mapkeys_t top_level[] = {
   MAPKEY("endpoints", proc_endpoints),
   MAPKEY("facility", proc_facility),
   MAPKEY("networks", proc_networks),
+  MAPKEY("sasl", sasl_conf_processor),
   MAPKEY("ssl", ssl_conf_processor),
   MAPKEY("statedir", proc_statedir),
   MAPKEY("uuid", proc_uuid)
