@@ -447,27 +447,8 @@ ep_ad_create(ep_config_t *epconf)
 int
 ep_ad_finish(ep_ad_t *ad, config_t *conf, conf_ctx_t *ctx)
 {
-  /* Set up default addressing */
-  ep_addr_default(&ad->epa_addr, &ad->epa_config->epc_addr);
-
-  /* Add the advertisement to the configuration */
-  switch (hash_add(&conf->cf_ads, &ad->epa_hashent)) {
-  case DBERR_NONE:
-    /* It was successful; also add it to the endpoint's linked list */
-    link_append(&ad->epa_config->epc_ads, &ad->epa_link);
-    break;
-
-  case DBERR_DUPLICATE:
-    config_report(ctx, LOG_WARNING, "Advertisement is a duplicate");
-    return 0;
-    break; /* not reached */
-
-  case DBERR_NOMEMORY:
-    config_report(ctx, LOG_WARNING,
-		  "Out of memory adding endpoint advertisement");
-    return 0;
-    break; /* not reached */
-  }
+  /* Add the advertisement to the endpoint's linked list */
+  link_append(&ad->epa_config->epc_ads, &ad->epa_link);
 
   return 1;
 }
@@ -511,6 +492,7 @@ int
 ep_config_finish(ep_config_t *ep_conf, config_t *conf, conf_ctx_t *ctx)
 {
   ep_ad_t *ad;
+  link_elem_t *elem;
 
   /* Set the default port as needed */
   if (!(ep_conf->epc_addr.ea_flags & (EA_LOCAL | EA_PORT)))
@@ -550,6 +532,29 @@ ep_config_finish(ep_config_t *ep_conf, config_t *conf, conf_ctx_t *ctx)
 		    "Out of memory creating default endpoint advertisement");
     else if (!ep_ad_finish(ad, conf, ctx))
       ep_ad_release(ad);
+  }
+
+  /* Polish the endpoint's advertisements */
+  for (elem = ep_conf->epc_ads.lh_first; elem; elem = elem->le_next) {
+    ad = elem->le_obj;
+
+    /* Set up the advertisement's default addressing */
+    ep_addr_default(&ad->epa_addr, &ep_conf->epc_addr);
+
+    /* Add the advertisement to the configuration */
+    switch (hash_add(&conf->cf_ads, &ad->epa_hashent)) {
+    case DBERR_NONE:
+      break; /* add successful */
+
+    case DBERR_DUPLICATE:
+      config_report(ctx, LOG_WARNING, "Endpoint advertisement is a duplicate");
+      break;
+
+    case DBERR_NOMEMORY:
+      config_report(ctx, LOG_WARNING,
+		    "Out of memory adding endpoint advertisements");
+      break;
+    }
   }
 
   return 1;
