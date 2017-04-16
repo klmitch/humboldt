@@ -147,6 +147,7 @@ connection_create(runtime_t *runtime, endpoint_t *endpoint,
   connection->con_endpoint = endpoint;
   connection->con_type = endpoint->ep_config->epc_type;
   connection->con_flags = 0;
+  connection->con_username = endpoint->ep_config->epc_username;
   connection->con_bev = 0;
   connection->con_root = 0;
   connection->con_ssl = 0;
@@ -221,12 +222,15 @@ connection_describe(connection_t *conn, char *buf, size_t buflen)
   /* Format the connection description */
   snprintf(buf, buflen,
 #ifdef WIN32
-	   "%s (id %" PRIdPTR ")", /* It's an intptr_t on Windows */
+	   "%s (id %" PRIdPTR ")%s%s%s", /* It's an intptr_t on Windows */
 #else
-	   "%s (id %d)", /* It's an int everywhere else */
+	   "%s (id %d)%s%s%s", /* It's an int everywhere else */
 #endif
 	   ep_addr_describe(&conn->con_remote, address, sizeof(address)),
-	   conn->con_socket);
+	   conn->con_socket,
+	   conn->con_username ? " [" : "",
+	   conn->con_username ? conn->con_username : "",
+	   conn->con_username ? "]" : "");
 
   return buf;
 }
@@ -247,6 +251,43 @@ connection_install(connection_t *conn, struct bufferevent *bev)
 
   /* Install the bufferevent on the connection */
   conn->con_bev = bev;
+
+  return 1;
+}
+
+int
+connection_set_username(connection_t *conn, const char *username,
+			uint32_t flags)
+{
+  /* Do we need to copy the username? */
+  if (flags & CONN_USERNAME_COPY) {
+    const char *tmp;
+
+    if (!(tmp = strdup(username)))
+      return 0;
+    else if (conn->con_username && (conn->con_flags & CONN_FLAG_FREE_USERNAME))
+      /* Have to free the old username */
+      free((void *)conn->con_username);
+
+    /* Save the new username */
+    conn->con_username = tmp;
+
+    /* It'll need to be freed */
+    conn->con_flags |= CONN_FLAG_FREE_USERNAME;
+  } else {
+    /* Free the old username if needed */
+    if (conn->con_username && (conn->con_flags & CONN_FLAG_FREE_USERNAME)) {
+      free((void *)conn->con_username);
+      conn->con_flags &= ~CONN_FLAG_FREE_USERNAME;
+    }
+
+    /* Just copy the username */
+    conn->con_username = username;
+
+    /* Set the free flag if needed */
+    if (flags & CONN_USERNAME_FREE)
+      conn->con_flags |= CONN_FLAG_FREE_USERNAME;
+  }
 
   return 1;
 }
@@ -416,6 +457,11 @@ connection_destroy(connection_t *conn, int immediate)
       return;
     }
   }
+
+  /* Free the username, if required */
+  if (conn->con_username && (conn->con_flags & CONN_FLAG_FREE_USERNAME))
+    free((void *)conn->con_username);
+  conn->con_username = 0;
 
   /* Free and zero the SSL object */
   if (conn->con_ssl)

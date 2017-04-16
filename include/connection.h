@@ -118,6 +118,7 @@ struct _connection_s {
   ep_type_t	con_type;	/**< Type of connection: peer or client? */
   conn_state_t	con_state;	/**< Connection state */
   uint32_t	con_flags;	/**< Miscellaneous non-state flags */
+  const char   *con_username;	/**< Authenticated user */
   struct bufferevent
 	       *con_bev;	/**< Libevent bufferevent for connection */
   struct bufferevent
@@ -152,6 +153,14 @@ struct _connection_s {
  * event processing is handled.
  */
 #define CONN_FLAG_TLS_HANDSHAKE	0x40000000
+
+/** \brief Connection username should be freed.
+ *
+ * This non-state flag indicates that the username associated with the
+ * connection contains allocated memory that should be released when
+ * the connection is.
+ */
+#define CONN_FLAG_FREE_USERNAME	0x20000000
 
 /** \brief Allocate and initialize a connection.
  *
@@ -207,6 +216,48 @@ const char *connection_describe(connection_t *conn, char *buf, size_t buflen);
  *		installed, false otherwise.
  */
 int connection_install(connection_t *conn, struct bufferevent *bev);
+
+/** \brief Set the username on the connection.
+ *
+ * This function is used to set the authenticated username on the
+ * connection.  It will release any previous username set on the
+ * connection, as needed, though if it fails, the previous username is
+ * unaffected.
+ *
+ * \param[in,out]	conn	The connection.
+ * \param[in,out]	username
+ *				The username to set.  If the
+ *				#CONN_USERNAME_COPY flag is not
+ *				passed, responsibility for the memory
+ *				is accepted by the connection object.
+ * \param[in]		flags	Flags controlling how the memory for
+ *				\p username is to be affected.
+ *
+ * \return	A true value if the operation succeeded, false
+ *		otherwise.  Note that this operation can only fail if
+ *		the #CONN_USERNAME_COPY flag is passed and the system
+ *		is unable to allocate enough memory to copy the
+ *		username.
+ */
+int connection_set_username(connection_t *conn, const char *username,
+			    uint32_t flags);
+
+/** \brief Username will need to be freed.
+ *
+ * If passed to connection_set_username(), this flag indicates that
+ * the memory associated with the \p username parameter will need to
+ * be freed when it is no longer needed.  This will allow constant
+ * strings to be passed.
+ */
+#define CONN_USERNAME_FREE	0x80000000
+
+/** \brief Copy the username.
+ *
+ * If passed to connection_set_username(), this flag indicates that
+ * the \p username parameter must be copied.  In this case, the
+ * #CONN_USERNAME_FREE flag will be ignored.
+ */
+#define CONN_USERNAME_COPY	0x40000000
 
 /** \brief Send connection state.
  *

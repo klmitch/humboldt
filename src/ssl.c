@@ -584,8 +584,12 @@ ssl_event(connection_t *conn, short events)
 	       connection_describe(conn, conn_desc, sizeof(conn_desc)), name);
 
     /* Clean up after ourselves */
-    free(name);
     X509_free(cert);
+
+    /* Set the name on the connection. Since we're not copying, this
+     * can't fail.
+     */
+    connection_set_username(conn, name, CONN_USERNAME_FREE);
 
     return 1;
   }
