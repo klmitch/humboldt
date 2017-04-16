@@ -436,12 +436,29 @@ proc_endpoint_type(const char *key, struct epconfig *epc,
     epc->endpoint->epc_flags |= EP_CONFIG_INVALID;
 }
 
+static void
+proc_endpoint_username(const char *key, struct epconfig *epc,
+		       yaml_ctx_t *ctx, yaml_node_t *value)
+{
+  conf_ctx_t conf_ctx = CONF_CTX_YAML(ctx, value);
+  const char *username;
+
+  common_verify(epc->endpoint, EP_CONFIG_MAGIC);
+
+  /* Convert the value as a string */
+  if (yaml_get_str(ctx, value, &username, 0, 0) &&
+      !(epc->endpoint->epc_username = strdup(username)))
+    config_report(&conf_ctx, LOG_WARNING,
+		  "Out of memory saving endpoint username");
+}
+
 static mapkeys_t endpoint_config[] = {
   MAPKEY("advertise", proc_endpoint_advertise),
   MAPKEY("ip", proc_endpoint_ip),
   MAPKEY("local", proc_endpoint_local),
   MAPKEY("port", proc_endpoint_port),
-  MAPKEY("type", proc_endpoint_type)
+  MAPKEY("type", proc_endpoint_type),
+  MAPKEY("username", proc_endpoint_username),
 };
 
 static void

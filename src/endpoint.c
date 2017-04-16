@@ -532,6 +532,12 @@ ep_config_telescope(ep_config_t *ep_conf, config_t *conf, conf_ctx_t *ctx,
     /* Copy over important information */
     new_conf->epc_flags = ep_conf->epc_flags;
     new_conf->epc_type = ep_conf->epc_type;
+    if (ep_conf->epc_username &&
+	!(new_conf->epc_username = strdup(ep_conf->epc_username))) {
+      config_report(ctx, LOG_WARNING, "Out of memory telescoping endpoint");
+      ep_config_release(new_conf);
+      continue;
+    }
 
     /* OK, now we set up the address */
     ep_addr_default(&new_conf->epc_addr, &iface->if_addr);
@@ -676,6 +682,10 @@ ep_config_finish(ep_config_t *ep_conf, config_t *conf, conf_ctx_t *ctx)
 void
 ep_config_release(ep_config_t *config)
 {
+  /* Release the username, if allocated */
+  if (config->epc_username)
+    free((void *)config->epc_username);
+
   /* Release the endpoint advertisements */
   link_iter(&config->epc_ads, (db_iter_t)ep_config_release_ads, 0);
 

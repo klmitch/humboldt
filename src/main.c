@@ -43,7 +43,7 @@ emit_endpoint(ep_config_t *endpoint, config_t *conf)
 {
   char addr_desc[ADDR_DESCRIPTION];
 
-  log_emit(conf, LOG_DEBUG, "  Endpoint: %s type %s (%s%s%s)",
+  log_emit(conf, LOG_DEBUG, "  Endpoint: %s type %s (%s%s%s)%s%s",
 	   ep_addr_describe(&endpoint->epc_addr, addr_desc,
 			    sizeof(addr_desc)),
 	   (endpoint->epc_type == ENDPOINT_UNKNOWN ? "unknown" :
@@ -57,7 +57,9 @@ emit_endpoint(ep_config_t *endpoint, config_t *conf)
 	    ""),
 	   (endpoint->epc_flags ==
 	    (EP_CONFIG_INVALID | EP_CONFIG_UNADVERTISED) ? "unadvertised" :
-	    ""));
+	    ""),
+	   endpoint->epc_username ? " Username: " : "",
+	   endpoint->epc_username ? endpoint->epc_username : "");
 
   if (!(endpoint->epc_flags & EP_CONFIG_UNADVERTISED)) {
     log_emit(conf, LOG_DEBUG, "    Advertisements (%d):",

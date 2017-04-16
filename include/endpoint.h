@@ -242,6 +242,7 @@ struct _ep_config_s {
   uint32_t	epc_flags;	/**< Endpoint flags */
   ep_addr_t	epc_addr;	/**< Address to listen on */
   ep_type_t	epc_type;	/**< Address type: client or peer */
+  const char   *epc_username;	/**< Username for the endpoint */
   link_head_t	epc_ads;	/**< Linked list of advertisements */
 };
 
@@ -283,6 +284,7 @@ struct _ep_config_s {
     _epc->epc_flags = 0;					\
     ep_addr_init(&_epc->epc_addr);				\
     _epc->epc_type = ENDPOINT_UNKNOWN;				\
+    _epc->epc_username = 0;					\
     link_head_init(&_epc->epc_ads);				\
     _epc->epc_magic = EP_CONFIG_MAGIC;				\
   } while (0)
