@@ -8,7 +8,7 @@ A "frame" is defined as a protocol data unit prefixed by the following
     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
    |       |R|E|\ /|               |                               |
-   | Vers. |E|R| X |  Next Header  |       Total frame length      |
+   | Vers. |E|R| X |    Protocol   |       Total frame length      |
    |       |P|R|/ \|               |                               |
    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
@@ -17,12 +17,38 @@ of the carrier protocol is version 0.)  The next four bits are flags
 used to subdivide the protocol space; the first bit is set if the
 frame is a reply, and the second bit is set in the case of an error,
 with the subsequent 2 bits reserved (meaning they MUST be set to 0).
-The next octet indicates the protocol of the next header, and the next
-two octets indicate the total frame length, including header.
+The next octet indicates the protocol contained in the message, and
+the next two octets indicate the total frame length, including the
+header.
 
-The "next header" value is modeled after IPv6, and may indicate
-extension headers (such as a fragmentation header) that wrap other
-headers.
+The "protocol" value is modeled after the IPv6 "next header" value,
+and may indicate extension headers (such as a fragmentation header)
+that wrap other headers.  No such extension headers currently exist,
+but will have values greater than 127 (to differentiate them from
+regular protocols) and will all begin with 32-bit headers like so:
+
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |I|C|           |               |                               |
+   |G|L|  Reserved |    Protocol   |         Header Length         |
+   |N|S|           |               |                               |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+The first bit, designated IGN, indicates an ignorable extension
+header; if set, and Humboldt does not understand the extension header,
+it is free to ignore it (though the header must be included if the
+message is forwarded).  The second bit, designated CLS, indicates that
+it is an error if Humboldt does not understand the extension header,
+and the whole message must be discarded and the connection closed.
+The remaining bits in the first octet are reserved and may be used by
+the extension itself.
+
+The second octet indicates the enclosed protocol; similar to the
+carrier protocol header, it designates a next header or another
+extension header.  The final two octets encode the full length of the
+header, and are used to allow Humboldt to skip the header if it elects
+to ignore it.
 
 Design Considerations
 =====================
@@ -34,40 +60,29 @@ is responsible for dividing what could be an undifferentiated stream
 of data (TCP's role) into a sequence of frames.  The carrier protocol
 needs no addressing information because that is provided by the
 underlying network protocols, which are used in a unicast fashion;
-higher-level protocols may need addressing information because of the
-"overlay" nature of an overlay network.  The REP bit can allow a reply
-to be differentiated from a request, allowing the next protocol to
-offload that bit of information; similarly, the ERR bit can allow an
-error to be differentiated from normal traffic.  There is no
-requirement that a protocol must use these bits; if it doesn't, they
-should be set to 0.  Bits 6 and 7 MUST be 0, and are not available for
-use by the protocols.
+however, higher-level Humboldt protocols may need addressing
+information because of the "overlay" nature of an overlay network.
+The REP bit can allow a reply to be differentiated from a request,
+allowing the protocol to offload that bit of information; similarly,
+the ERR bit can allow an error to be differentiated from normal
+traffic.  There is no requirement that a protocol must use these bits;
+if it doesn't, they should be set to 0.  Bits 6 and 7 MUST be 0, and
+are not available for use by the protocols.
 
 Protocol 0
 ==========
 
-Protocol 0 is used for link status negotiation.  It must indicate the
-state of the connection, as well as wrap TLS and SASL negotiation.  It
-must also transfer the node identifiers, so both sides know who
-they're talking to.  It may also be responsible for PING/PONG, or
-those may be offloaded to a side protocol.
+Protocol 0 is used for indicating link state.  It must indicate the
+state of the connection, as well as transferring node identifiers, so
+that all participants know who they're talking to.
 
-Let's start with state transfer.  Connection state will be identified
-by a single number; right now, the states include INITIAL, AUTH,
-PRESYNC, SYNC, PENDING, PEER, CLIENT, and ERROR, which is 8 values; as
-such, 3 bits is enough to specify the states, but we should expect
-more states will be needed as the design gels.  An additional piece of
-information is whether the connection has been secured, e.g., via TLS;
-that's 1 bit of information.  We need the ID of the host, which is a
-128-bit value; and for the initial state, we should also be able to
-identify whether TLS is available and what SASL mechanisms are
-available.  We also need to know what kind of connection we are: peer
-or client; that depends on the endpoint we connected to, and is again
-a 1-bit piece of data.
-
-I think it's best to do the TLS and SASL parts in another protocol,
-and I want to reserve protocol 1 for PING/PONG exchanges, so I propose
-that protocol 0 looks like:
+Connection status (a component of the link state) will be identified
+by a single 8-bit number; right now, these status codes include
+INITIAL (0), CLIENT (1), AUTH (2), SYNC (3), PENDING, PEER, and
+ERROR(255).  Flags constitute the other main component of link state,
+and are used to indicate whether the connection will be treated as a
+client or a peer; whether the connection has been secured; and whether
+TLS is available.  Protocol 0 messages look like:
 
     0                   1                   2                   3
     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -89,14 +104,14 @@ The CLI bit indicates whether the connection is client (set) or peer
 (clear).  The SEC bit indicates whether the connection is considered
 secure by the Humboldt instance, and the TLS bit indicates whether TLS
 is available for the connection.  The two reserved fields must be set
-to all-zeros, and the state field is an 8-bit field indicating the
-connection state, with 0 indicating the initial state and 255
-indicating an error state.  Protocol 0 uses the REP bit of the carrier
-protocol: a connection may send an empty protocol 0 frame with REP
-clear to prompt the Humboldt instance to reply with the current
-connection state.  Humboldt always sets REP when sending the current
-state.  A current state message is sent any time the connection
-changes state, including at connection establishment.
+to all-zeros, and the status field is an 8-bit field indicating the
+connection status, numbered as indicated above.  Protocol 0 uses the
+REP bit of the carrier protocol: a connection may send an empty
+protocol 0 frame with REP clear to prompt the Humboldt instance to
+reply with the current connection state.  Humboldt always sets REP
+when sending the current state.  A current state message is sent any
+time the connection changes state, including at connection
+establishment.
 
 Protocol 1
 ==========
@@ -124,29 +139,54 @@ negotiation in originator mode on the same connection.  Once
 negotiation is complete, Humboldt will send a connection state change
 (protocol 0) frame with the SEC bit set.
 
-Protocols 3 and 4
-=================
+Protocol 3
+==========
 
-For authentication, Humboldt uses SASL, and uses 2 different protocol
-numbers to handle different SASL interactions.  A protocol 3 frame
-requests a list of authentication mechanisms, and may be sent at any
-time, even after authentication is complete.  (This may be used to
-verify that a downgrade attack was not used.)  No data is necessary.
-Humboldt will respond with the REP bit set, and the frame data
-containing a space-separated list of SASL mechanisms supported.
+For authentication, Humboldt uses SASL, and the protocol number 3,
+along with the REP and ERR flags.  The message consists of a header of
+one octet, specifying the length of a mechanism name; after the byte
+comes the name of the mechanism (without a NUL termination), then the
+SASL exchange data octets.  The special value 255 for the mechanism
+name length indicates that the message is a request for a list of SASL
+mechanisms applying to the connection, or, if the REP bit is set, the
+requested list of mechanism names separated by single whitespace
+characters.  If an error occurs, the ERR message contains an English
+description of the error, as returned by the underlying SASL library.
+In the case of ERR messages, the header octet is omitted.
 
-When a connection originator settles on an authentication mechanism to
-use, it issues a protocol 4 frame, with the REP bit clear; the payload
-should specify the name of the authentication mechanism to use.
-Humboldt will respond with REP set and mechanism-specific data in the
-payload; the connection originator should return mechanism-specific
-data, again with REP set, until both Humboldt and the originator are
-satisfied.  If an error occurs, that should be communicated to the
-other participant by sending a protocol 4 frame with ERR set.  Once
-authentication is successfully negotiated, Humboldt installs any
-mechanism-specific encoder or decoder on the connection, then sends a
-connection state change (protocol 0) frame with the state updated to
-AUTH for peer-type connections or CLIENT for client-type connections;
-and, optionally, the SEC bit will be set if the mechanism will encrypt
-the data stream.  (A guarantee of integrity is insufficient for
-Humboldt to consider the data stream secure.)
+Authentication typically begins with the connection originator sending
+a protocol 3 message with no bits set and the octet 255 after the
+protocol header.  The connection acceptor responds with a protocol 3
+message with the REP bit set, with the octet 255 and the mechanism
+names following the protocol header.  This exchange is optional.
+
+The first required step of authentication begins when the connection
+originator sends a protocol 3 message, again with no bits set, and the
+first octet containing the length of the selected mechanism name; this
+is immediately followed by the mechanism name, then any initial SASL
+exchange data.  The connection acceptor will then respond with another
+protocol 3 message with the REP bit set, followed by an octet of 0 and
+then server SASL exchange data.  Subsequent messages SHOULD exclude
+the mechanism name; if it is provided, it will be ignored.
+
+The next step after successful conclusion of authentication depends on
+whether the connection is a client or peer connection.  In the case of
+client authentication, the connection is set to the CLIENT status (1).
+For peer authentication, the status is set to the AUTH status (2); the
+connection originator is expected to reply with its state for the
+connection (a protocol 0 message), and the connection acceptor and
+connection originator thereafter swap roles to perform authentication
+again.  Once this mutual authentication is complete, the status will
+be set to the SYNC state by both participants.
+
+Negotiation of a Security Layer
+-------------------------------
+
+The SASL authentication exchange described above may only negotiate a
+security layer if the connection is not already secure at the time the
+exchange begins.  This is to prevent the overhead of
+multiply-encrypting the link.  Also note that a negotiated security
+layer is not considered secure for the purposes of setting the SEC bit
+unless it provides at least 56 bits of encryption strength (this is to
+match GSSAPI).  If a security layer is negotiated, it is activated
+immediately after the exchange is complete.
