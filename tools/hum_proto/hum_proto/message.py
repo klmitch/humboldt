@@ -825,6 +825,57 @@ def _protocol0(**kwargs):
     return RequestConnectionState(**kwargs)
 
 
+class PingReply(Message):
+    """
+    Represent a ping reply.
+    """
+
+    PROTOCOL = 1
+    default_carrier_flags = 'reply'
+
+
+class PingRequest(Message):
+    """
+    Represent a ping request.
+    """
+
+    PROTOCOL = 1
+
+    def reaction(self, apploop):
+        """
+        A reaction is invoked when a message is received.  This reaction
+        is designed to reply to a ping request with a corresponding
+        ping reply.
+
+        :param apploop: The application loop.
+        :type apploop: ``hum_proto.apploop.ApplicationLoop``
+        """
+
+        # Generate a proper reply
+        apploop.send_msg(PingReply(payload=self.payload))
+
+
+@Message.register(1)
+def _protocol1(**kwargs):
+    """
+    Decode protocol 1 messages.
+
+    :param carrier_flags: The carrier protocol flags.
+
+    :returns: An appropriate instance of a subclass of ``Message``
+              representing the protocol 1 message.
+    :rtype: ``Message``
+    """
+
+    # Error flag isn't defined for protocol 1
+    if 'error' in kwargs['carrier_flags']:
+        return Message(**kwargs)
+    elif 'reply' in kwargs['carrier_flags']:
+        return PingReply(**kwargs)
+
+    return PingRequest(**kwargs)
+
+
 class StartTLSError(Message):
     """
     Represent an error for the STARTTLS exchange.  Humboldt sends

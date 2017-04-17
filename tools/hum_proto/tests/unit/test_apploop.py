@@ -470,6 +470,9 @@ class TestApplicationLoop(object):
             side_effect=message.CommandError('some problem'),
         )
         mock_display = mocker.patch.object(apploop.ApplicationLoop, 'display')
+        mock_send_msg = mocker.patch.object(
+            apploop.ApplicationLoop, 'send_msg'
+        )
         obj = apploop.ApplicationLoop('sock', 'cli', 'srv')
 
         obj.send(['some', 'arguments'])
@@ -478,67 +481,62 @@ class TestApplicationLoop(object):
         mock_display.assert_called_once_with(
             'ERROR: Failed to understand message to send: some problem'
         )
+        assert not mock_send_msg.called
 
-    def test_send_closed_noaction(self, mocker):
-        msg = mocker.Mock(
-            __repr__=mocker.Mock(return_value='"a message"'),
-            action=None,
-        )
-        mock_interpret = mocker.patch.object(
-            apploop.message.Message, 'interpret', return_value=msg
-        )
-        mock_display = mocker.patch.object(apploop.ApplicationLoop, 'display')
-        obj = apploop.ApplicationLoop(None, 'cli', 'srv')
-
-        obj.send(['some', 'arguments'])
-
-        mock_interpret.assert_called_once_with(['some', 'arguments'])
-        mock_display.assert_called_once_with('ERROR: Connection is closed')
-        assert not msg.send.called
-
-    def test_send_closed_withaction(self, mocker):
+    def test_send_closed(self, mocker):
         msg = mocker.Mock(__repr__=mocker.Mock(return_value='"a message"'))
         mock_interpret = mocker.patch.object(
             apploop.message.Message, 'interpret', return_value=msg
         )
         mock_display = mocker.patch.object(apploop.ApplicationLoop, 'display')
+        mock_send_msg = mocker.patch.object(
+            apploop.ApplicationLoop, 'send_msg'
+        )
         obj = apploop.ApplicationLoop(None, 'cli', 'srv')
 
         obj.send(['some', 'arguments'])
 
         mock_interpret.assert_called_once_with(['some', 'arguments'])
         mock_display.assert_called_once_with('ERROR: Connection is closed')
-        assert not msg.send.called
-        assert not msg.action.called
+        assert not mock_send_msg.called
 
-    def test_send_sent_noaction(self, mocker):
-        msg = mocker.Mock(
-            __repr__=mocker.Mock(return_value='"a message"'),
-            action=None,
-        )
+    def test_send_sent(self, mocker):
+        msg = mocker.Mock(__repr__=mocker.Mock(return_value='"a message"'))
         mock_interpret = mocker.patch.object(
             apploop.message.Message, 'interpret', return_value=msg
         )
         mock_display = mocker.patch.object(apploop.ApplicationLoop, 'display')
+        mock_send_msg = mocker.patch.object(
+            apploop.ApplicationLoop, 'send_msg'
+        )
         obj = apploop.ApplicationLoop('sock', 'cli', 'srv')
 
         obj.send(['some', 'arguments'])
 
         mock_interpret.assert_called_once_with(['some', 'arguments'])
+        assert not mock_display.called
+        mock_send_msg.assert_called_once_with(msg)
+
+    def test_send_msg_noaction(self, mocker):
+        msg = mocker.Mock(
+            __repr__=mocker.Mock(return_value='"a message"'),
+            action=None,
+        )
+        mock_display = mocker.patch.object(apploop.ApplicationLoop, 'display')
+        obj = apploop.ApplicationLoop('sock', 'cli', 'srv')
+
+        obj.send_msg(msg)
+
         msg.send.assert_called_once_with('sock')
         mock_display.assert_called_once_with('C: "a message"')
 
-    def test_send_sent_withaction(self, mocker):
+    def test_send_msg_withaction(self, mocker):
         msg = mocker.Mock(__repr__=mocker.Mock(return_value='"a message"'))
-        mock_interpret = mocker.patch.object(
-            apploop.message.Message, 'interpret', return_value=msg
-        )
         mock_display = mocker.patch.object(apploop.ApplicationLoop, 'display')
         obj = apploop.ApplicationLoop('sock', 'cli', 'srv')
 
-        obj.send(['some', 'arguments'])
+        obj.send_msg(msg)
 
-        mock_interpret.assert_called_once_with(['some', 'arguments'])
         msg.send.assert_called_once_with('sock')
         msg.action.assert_called_once_with(obj)
         mock_display.assert_called_once_with('C: "a message"')

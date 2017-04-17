@@ -25,12 +25,15 @@
 #include "include/alloc.h"
 #include "include/common.h"
 #include "include/connection.h"
+#include "include/log.h"
 #include "include/protocol.h"
 #include "include/ssl.h"
 
+static pbuf_result_t ping_process(protocol_buf_t *msg, connection_t *conn);
+
 static pbuf_dispatch_t processors[] = {
   connection_process,		/* Protocol 0: Connection state */
-  0,				/* Protocol 1: PING/PONG (future) */
+  ping_process,			/* Protocol 1: PING/PONG */
   ssl_process			/* Protocol 2: SSL */
 };
 
@@ -344,4 +347,30 @@ protocol_buf_dispatch(protocol_buf_t *msg, connection_t *conn)
   connection_report_error(conn, CONN_ERR_UNKNOWN_PROTOCOL, msg->pb_protocol);
 
   return PBR_CONNECTION_CLOSE;
+}
+
+static pbuf_result_t
+ping_process(protocol_buf_t *msg, connection_t *conn)
+{
+  char conn_desc[ADDR_DESCRIPTION];
+
+  common_verify(msg, PROTOCOL_BUF_MAGIC);
+  common_verify(conn, CONNECTION_MAGIC);
+
+  /* Handle the message bits */
+  if (msg->pb_flags & PROTOCOL_ERROR)
+    return PBR_MSG_PROCESSED; /* Unused */
+  else if (msg->pb_flags & PROTOCOL_REPLY)
+    return PBR_MSG_PROCESSED; /* In future, we'll need to store the RTT */
+
+  /* OK, it's a request; set the reply flag and send it back */
+  msg->pb_flags |= PROTOCOL_REPLY;
+  if (!protocol_buf_send(msg, conn)) {
+    log_emit(conn->con_runtime->rt_config, LOG_NOTICE,
+	     "Failed to send ping response packet for %s",
+	     connection_describe(conn, conn_desc, sizeof(conn_desc)));
+    return PBR_CONNECTION_CLOSE;
+  }
+
+  return PBR_MSG_PROCESSED;
 }

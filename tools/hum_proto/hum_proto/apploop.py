@@ -344,6 +344,18 @@ class ApplicationLoop(object):
         if self.sock is None:
             self.display('ERROR: Connection is closed')
             return
+
+        # Send the message
+        self.send_msg(msg)
+
+    def send_msg(self, msg):
+        """
+        Send a message to the connected Humboldt instance.
+
+        :param msg: The message to send.
+        :type msg: ``humboldt.message.Message``
+        """
+
         msg.send(self.sock)
 
         # Display what we sent
