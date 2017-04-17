@@ -164,6 +164,18 @@ static int level_map[] = {
   -1		/* SASL_LOG_PASS */
 };
 
+/* Map of libsasl level to prefix */
+static const char *level_pfx[] = {
+  0,
+  "[ ERR ]",
+  "[ FAIL]",
+  "[ WARN]",
+  "[ NOTE]",
+  "[DEBUG]",
+  "[TRACE]",
+  0
+};
+
 static int
 log_callback(config_t *conf, int level, const char *msg)
 {
@@ -172,7 +184,7 @@ log_callback(config_t *conf, int level, const char *msg)
     return SASL_OK;
 
   /* Use our log_emit() */
-  log_emit(conf, level_map[level], "libsasl: %s", msg);
+  log_emit(conf, level_map[level], "libsasl2: %s %s", level_pfx[level], msg);
 
   return SASL_OK;
 }

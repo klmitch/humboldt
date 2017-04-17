@@ -224,10 +224,19 @@ static int severity_map[] = {
   LOG_ERR	/* EVENT_LOG_ERR */
 };
 
+/* Map of libevent severity to prefix */
+static const char *severity_pfx[] = {
+  "[ DEBUG ]",
+  "[ NOTICE]",
+  "[WARNING]",
+  "[  ERR  ]"
+};
+
 static void
 log_event_cb(int severity, const char *msg)
 {
-  log_emit(_ev_conf, severity_map[severity], "libevent: %s", msg);
+  log_emit(_ev_conf, severity_map[severity], "libevent: %s %s",
+	   severity_pfx[severity], msg);
 }
 
 void
