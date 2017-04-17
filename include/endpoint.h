@@ -436,7 +436,7 @@ const char *ep_addr_describe(ep_addr_t *addr, char *buf, size_t buflen);
  *		depending on whether \p key1 is less than, equal to,
  *		or greater than \p key2.
  */
-int ep_addr_comp(void *key1, void *key2);
+int ep_addr_comp(const void *key1, const void *key2);
 
 /** \brief Hash an address.
  *
@@ -448,7 +448,7 @@ int ep_addr_comp(void *key1, void *key2);
  *
  * \return	The hash of the address.
  */
-hash_t ep_addr_hash(void *key);
+hash_t ep_addr_hash(const void *key);
 
 /** \brief Create endpoint advertisement.
  *

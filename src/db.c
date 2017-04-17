@@ -762,7 +762,7 @@ static uint32_t primes[] = {
 };
 
 hash_t
-hash_fnv1a_update(hash_t partial, void *data, ev_ssize_t len)
+hash_fnv1a_update(hash_t partial, const void *data, ev_ssize_t len)
 {
   const unsigned char *chars = data;
   int i;
@@ -776,7 +776,7 @@ hash_fnv1a_update(hash_t partial, void *data, ev_ssize_t len)
 }
 
 int
-db_str_comp(void *key1, void *key2)
+db_str_comp(const void *key1, const void *key2)
 {
   const char *str1 = key1, *str2 = key2;
 
@@ -784,7 +784,7 @@ db_str_comp(void *key1, void *key2)
 }
 
 hash_t
-db_str_hash(void *key)
+db_str_hash(const void *key)
 {
   return hash_fnv1a_update(HASH_INIT, key, -1);
 }
@@ -864,7 +864,7 @@ _hash_resize(hash_tab_t *table, uint32_t new_size)
 }
 
 void *
-_hash_find(hash_tab_t *table, void *key, hash_t hash)
+_hash_find(hash_tab_t *table, const void *key, hash_t hash)
 {
   link_elem_t *elem;
 
@@ -933,7 +933,7 @@ hash_remove(hash_ent_t *entry)
 }
 
 void *
-hash_find(hash_tab_t *table, void *key)
+hash_find(hash_tab_t *table, const void *key)
 {
   hash_t hash;
 

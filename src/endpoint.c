@@ -343,10 +343,10 @@ ep_addr_describe(ep_addr_t *addr, char *buf, size_t buflen)
 }
 
 int
-ep_addr_comp(void *key1, void *key2)
+ep_addr_comp(const void *key1, const void *key2)
 {
   int comp;
-  ep_addr_t *addr1 = key1, *addr2 = key2;
+  const ep_addr_t *addr1 = key1, *addr2 = key2;
 
   /* Invalid addresses are indistinguishable and sort before others */
   if (addr1->ea_flags & EA_INVALID)
@@ -392,10 +392,10 @@ ep_addr_comp(void *key1, void *key2)
 }
 
 hash_t
-ep_addr_hash(void *key)
+ep_addr_hash(const void *key)
 {
   hash_t hash = HASH_INIT;
-  ep_addr_t *addr = key;
+  const ep_addr_t *addr = key;
 
   /* Invalid addresses are essentially zero length */
   if (addr->ea_flags & EA_INVALID)

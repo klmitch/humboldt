@@ -78,7 +78,7 @@ typedef enum _db_error_e {
  *		depending on whether \p key1 is less than, equal to,
  *		or greater than \p key2.
  */
-typedef int (*db_comp_t)(void *key1, void *key2);
+typedef int (*db_comp_t)(const void *key1, const void *key2);
 
 /** \brief Iteration callback.
  *
@@ -104,7 +104,7 @@ typedef void (*db_iter_t)(void *obj, void *extra);
  *
  * \return	The hash of the key.
  */
-typedef hash_t (*hash_func_t)(void *key);
+typedef hash_t (*hash_func_t)(const void *key);
 
 /** \brief Linked list head structure.
  *
@@ -435,7 +435,7 @@ struct _hash_ent_s {
  *		subsequent invocation of hash_fnv1a_update() or
  *		returned by a #hash_func_t function.
  */
-hash_t hash_fnv1a_update(hash_t partial, void *data, ev_ssize_t len);
+hash_t hash_fnv1a_update(hash_t partial, const void *data, ev_ssize_t len);
 
 /** \brief Compare strings.
  *
@@ -450,7 +450,7 @@ hash_t hash_fnv1a_update(hash_t partial, void *data, ev_ssize_t len);
  *		depending on whether \p key1 is less than, equal to,
  *		or greater than \p key2.
  */
-int db_str_comp(void *key1, void *key2);
+int db_str_comp(const void *key1, const void *key2);
 
 /** \brief Hash a string.
  *
@@ -462,7 +462,7 @@ int db_str_comp(void *key1, void *key2);
  *
  * \return	The hash of the string.
  */
-hash_t db_str_hash(void *key);
+hash_t db_str_hash(const void *key);
 
 /** \brief Initial hash value.
  *
@@ -504,7 +504,7 @@ void hash_remove(hash_ent_t *entry);
  * \return	The desired entry, or \c NULL if no matching entry
  *		exists in the table.
  */
-void *hash_find(hash_tab_t *table, void *key);
+void *hash_find(hash_tab_t *table, const void *key);
 
 /** \brief Iterate over a hash table.
  *
