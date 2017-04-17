@@ -16,13 +16,18 @@
 
 #include <config.h>
 
+#include <sasl/sasl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "include/configuration.h"
+#include "include/log.h"
 #include "include/sasl_util.h"
 #include "include/yaml_util.h"
+
+#define HUMBOLDT_APPNAME	"Humboldt"
+#define MAX_SASL_CALLBACKS	2
 
 static void
 proc_sasl_conf(const char *key, sasl_conf_t *sasl_conf, yaml_ctx_t *ctx,
@@ -146,4 +151,93 @@ sasl_conf_free(sasl_conf_t *conf)
 
   /* Release the configuration memory */
   free(conf);
+}
+
+static int level_map[] = {
+  -1,		/* SASL_LOG_NONE */
+  LOG_ERR,	/* SASL_LOG_ERR */
+  LOG_WARNING,	/* SASL_LOG_FAIL */
+  LOG_WARNING,	/* SASL_LOG_WARN */
+  LOG_NOTICE,	/* SASL_LOG_NOTE */
+  LOG_DEBUG,	/* SASL_LOG_DEBUG */
+  LOG_DEBUG,	/* SASL_LOG_TRACE */
+  -1		/* SASL_LOG_PASS */
+};
+
+static int
+log_callback(config_t *conf, int level, const char *msg)
+{
+  /* If it's one of the levels we should not log, skip */
+  if (level_map[level] < 0)
+    return SASL_OK;
+
+  /* Use our log_emit() */
+  log_emit(conf, level_map[level], "libsasl: %s", msg);
+
+  return SASL_OK;
+}
+
+static int
+getopt_callback(sasl_conf_t *sasl_conf, const char *plugin_name,
+		const char *option, const char **result, unsigned int *len)
+{
+  sasl_option_t *opt;
+
+  /* Look up the option */
+  if ((opt = hash_find(&sasl_conf->sac_options, option))) {
+    /* Set up the result, and length if requested */
+    *result = opt->sao_value;
+    if (len)
+      *len = opt->sao_vallen;
+  }
+
+  return SASL_OK;
+}
+
+#define set_callback(cb_id, cb_proc, cb_context)	\
+  do {							\
+    callbacks[cb_idx].id = (cb_id);			\
+    callbacks[cb_idx].proc = (int (*)(void))(cb_proc);	\
+    callbacks[cb_idx].context = (cb_context);		\
+    cb_idx++; /* Increment to the next callback */	\
+  } while (0)
+
+#define last_callback()				\
+  do {						\
+    callbacks[cb_idx].id = SASL_CB_LIST_END;	\
+    callbacks[cb_idx].proc = 0;			\
+    callbacks[cb_idx].context = 0;		\
+  } while (0)
+
+int
+initialize_sasl(config_t *conf)
+{
+  sasl_callback_t callbacks[MAX_SASL_CALLBACKS + 1];
+  int cb_idx = 0, result;
+
+  /* Set up the logging callback */
+  set_callback(SASL_CB_LOG, log_callback, conf);
+
+  /* If we have SASL options in the config, set up the getopt callback */
+  if (conf->cf_sasl)
+    set_callback(SASL_CB_GETOPT, getopt_callback, conf->cf_sasl);
+
+  /* Done setting up the callbacks */
+  last_callback();
+
+  /* Initialize the SASL library */
+  if ((result = sasl_client_init(callbacks)) != SASL_OK) {
+    log_emit(conf, LOG_ERR, "Failed to initialize SASL (client side): %s",
+	     sasl_errstring(result, 0, 0));
+    return 0;
+  } else if ((result = sasl_server_init(callbacks, HUMBOLDT_APPNAME)) !=
+	     SASL_OK) {
+    log_emit(conf, LOG_ERR, "Failed to initialize SASL (server side): %s",
+	     sasl_errstring(result, 0, 0));
+    sasl_client_done();
+    return 0;
+  }
+
+  log_emit(conf, LOG_INFO, "SASL initialized");
+  return 1;
 }

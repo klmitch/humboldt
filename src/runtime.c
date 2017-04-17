@@ -28,6 +28,8 @@
 #include "include/configuration.h"
 #include "include/log.h"
 #include "include/runtime.h"
+#include "include/ssl.h"
+#include "include/sasl_util.h"
 
 static void
 handle_sigint(evutil_socket_t signum, short event, runtime_t *runtime)
@@ -84,6 +86,10 @@ initialize_runtime(runtime_t *runtime, config_t *conf)
   } else
     log_emit(conf, LOG_INFO, "Libevent initialized with method %s",
 	     event_base_get_method(runtime->rt_evbase));
+
+  /* Initialize SASL */
+  if (!initialize_sasl(conf))
+    return 0;
 
   /* Initialize SSL */
   runtime->rt_ssl = ssl_ctx_init(conf);

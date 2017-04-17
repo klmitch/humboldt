@@ -102,4 +102,19 @@ void sasl_conf_processor(const char *key, config_t *conf,
  */
 void sasl_conf_free(sasl_conf_t *conf);
 
+/** \brief Initialize SASL library.
+ *
+ * This function is used to initialize the SASL library.  It sets up
+ * the appropriate callbacks for such things as logging and
+ * configuration settings.  (Note that the configuration settings
+ * callback is not registered if no "sasl" section is found in the
+ * configuration file.)
+ *
+ * \param[in]		conf	The Humboldt configuration.
+ *
+ * \return	A true value if initialization succeeded, false
+ *		otherwise.
+ */
+int initialize_sasl(config_t *conf);
+
 #endif /* _HUMBOLDT_SASL_UTIL_H */
