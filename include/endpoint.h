@@ -243,6 +243,7 @@ struct _ep_config_s {
   ep_addr_t	epc_addr;	/**< Address to listen on */
   ep_type_t	epc_type;	/**< Address type: client or peer */
   const char   *epc_username;	/**< Username for the endpoint */
+  unsigned int	epc_ssf;	/**< Default security strength factor */
   link_head_t	epc_ads;	/**< Linked list of advertisements */
 };
 
@@ -268,6 +269,13 @@ struct _ep_config_s {
  */
 #define EP_CONFIG_UNADVERTISED	0x40000000
 
+/** \brief Security strength factor set.
+ *
+ * This flag indicates that the security strength factor for an
+ * endpoint configuration has been set.
+ */
+#define EP_CONFIG_SSF_SET	0x20000000
+
 /** \brief Initialize endpoint configuration.
  *
  * Initialize an endpoint configuration structure.  This initializes
@@ -285,6 +293,7 @@ struct _ep_config_s {
     ep_addr_init(&_epc->epc_addr);				\
     _epc->epc_type = ENDPOINT_UNKNOWN;				\
     _epc->epc_username = 0;					\
+    _epc->epc_ssf = 0;						\
     link_head_init(&_epc->epc_ads);				\
     _epc->epc_magic = EP_CONFIG_MAGIC;				\
   } while (0)

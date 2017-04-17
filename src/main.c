@@ -60,6 +60,8 @@ emit_endpoint(ep_config_t *endpoint, config_t *conf)
 	    ""),
 	   endpoint->epc_username ? " Username: " : "",
 	   endpoint->epc_username ? endpoint->epc_username : "");
+  log_emit(conf, LOG_DEBUG, "    Endpoint security strength factor: %d",
+	   endpoint->epc_ssf);
 
   if (!(endpoint->epc_flags & EP_CONFIG_UNADVERTISED)) {
     log_emit(conf, LOG_DEBUG, "    Advertisements (%d):",
@@ -107,6 +109,8 @@ main(int argc, char **argv)
 	   (conf.cf_flags & CONFIG_FACILITY_FIXED) ? " (no override)" : "");
   uuid_unparse(conf.cf_uuid, uuid_buf);
   log_emit(&conf, LOG_DEBUG, "Humboldt node UUID: %s", uuid_buf);
+  log_emit(&conf, LOG_DEBUG, "Minimum security strength factor: %u",
+	   conf.cf_min_ssf);
 
   /* How many endpoints have been defined? */
   log_emit(&conf, LOG_DEBUG, "Endpoints (%d):", conf.cf_endpoints.ht_count);

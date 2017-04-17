@@ -261,9 +261,10 @@ initialize_sasl(config_t *conf)
   return 1;
 }
 
-sasl_connection_t *
+int
 sasl_connection_init(connection_t *conn)
 {
+  char conn_desc[ADDR_DESCRIPTION];
 #ifdef INET6_ADDRSTRLEN
   char addrbuf[INET6_ADDRSTRLEN + 1];
 #else
@@ -280,7 +281,8 @@ sasl_connection_init(connection_t *conn)
   /* Begin by allocating a connection object */
   if (!(sasl_conn = alloc(&connections))) {
     log_emit(conn->con_runtime->rt_config, LOG_WARNING,
-	     "Out of memory allocating SASL connection information");
+	     "Out of memory allocating SASL connection information for %s",
+	     connection_describe(conn, conn_desc, sizeof(conn_desc)));
     return 0;
   }
 
@@ -325,24 +327,27 @@ sasl_connection_init(connection_t *conn)
 				0, SASL_SUCCESS_DATA,
 				&sasl_conn->sac_server)) != SASL_OK) {
     log_emit(conn->con_runtime->rt_config, LOG_NOTICE,
-	     "Failed to initialize SASL connection (server side): %s",
+	     "Failed to initialize SASL connection (server side) for %s: %s",
+	     connection_describe(conn, conn_desc, sizeof(conn_desc)),
 	     sasl_errstring(result, 0, 0));
     release(&connections, sasl_conn);
     return 0;
   }
 
   /* Initialize the client side of SASL, if needed */
-  if (conn->con_type == ENDPOINT_PEER &&
-      (result = sasl_client_new(HUMBOLDT_SVCNAME, 0, srvaddr, cliaddr,
-				0, SASL_SUCCESS_DATA,
-				&sasl_conn->sac_client)) != SASL_OK) {
-    log_emit(conn->con_runtime->rt_config, LOG_NOTICE,
-	     "Failed to initialize SASL connection (client side): %s",
-	     sasl_errstring(result, 0, 0));
-    sasl_dispose(&sasl_conn->sac_server);
-    sasl_conn->sac_server = 0;
-    release(&connections, sasl_conn);
-    return 0;
+  if (conn->con_type == ENDPOINT_PEER) {
+    if ((result = sasl_client_new(HUMBOLDT_SVCNAME, 0, srvaddr, cliaddr,
+				  0, SASL_SUCCESS_DATA,
+				  &sasl_conn->sac_client)) != SASL_OK) {
+      log_emit(conn->con_runtime->rt_config, LOG_NOTICE,
+	       "Failed to initialize SASL connection (client side) for %s: %s",
+	       connection_describe(conn, conn_desc, sizeof(conn_desc)),
+	       sasl_errstring(result, 0, 0));
+      sasl_dispose(&sasl_conn->sac_server);
+      sasl_conn->sac_server = 0;
+      release(&connections, sasl_conn);
+      return 0;
+    }
   } else
     sasl_conn->sac_client = 0;
 
@@ -350,7 +355,122 @@ sasl_connection_init(connection_t *conn)
   sasl_conn->sac_bev = 0;
   sasl_conn->sac_magic = SASL_CONNECTION_MAGIC;
 
-  return sasl_conn;
+  /* Save it in the connection */
+  conn->con_sasl = sasl_conn;
+
+  /* Set the initial SSF */
+  if (!sasl_set_ssf(conn, conn->con_endpoint->ep_config->epc_ssf)) {
+    conn->con_sasl = 0;
+    sasl_connection_release(sasl_conn);
+    return 0;
+  }
+
+  /* Set the external authentication ID if it's available */
+  if (conn->con_username && !sasl_set_external(conn, conn->con_username)) {
+    conn->con_sasl = 0;
+    sasl_connection_release(sasl_conn);
+    return 0;
+  }
+
+  return 1;
+}
+
+int
+sasl_set_ssf(connection_t *conn, unsigned int ssf)
+{
+  char conn_desc[ADDR_DESCRIPTION];
+  sasl_security_properties_t sec_props;
+
+  log_emit(conn->con_runtime->rt_config, LOG_DEBUG,
+	   "Setting security strength factor of %s to %d",
+	   connection_describe(conn, conn_desc, sizeof(conn_desc)), ssf);
+
+  /* Begin by setting up the security properties */
+  sec_props.security_flags = SASL_SEC_NOANONYMOUS;
+  sec_props.property_names = 0;
+  sec_props.property_values = 0;
+  if (ssf >= conn->con_runtime->rt_config->cf_min_ssf) {
+    sec_props.min_ssf = 0;
+    sec_props.max_ssf = 0;
+    sec_props.maxbufsize = 0;
+  } else {
+    /* Still in plain text mode */
+    sec_props.security_flags |= SASL_SEC_NOPLAINTEXT;
+    sec_props.min_ssf = conn->con_runtime->rt_config->cf_min_ssf;
+    sec_props.max_ssf = 256; /* Just an arbitrary maximum */
+    sec_props.maxbufsize = 0; /* Not supported yet */
+  }
+
+  /* First, set up the security strength factor for the server side */
+  if (sasl_setprop(conn->con_sasl->sac_server, SASL_SSF_EXTERNAL, &ssf) !=
+      SASL_OK) {
+    log_emit(conn->con_runtime->rt_config, LOG_NOTICE,
+	     "Failed to set security strength factor on SASL connection "
+	     "(server side) for %s: %s",
+	     connection_describe(conn, conn_desc, sizeof(conn_desc)),
+	     sasl_errdetail(conn->con_sasl->sac_server));
+    return 0;
+  }
+
+  /* Now try the security properties */
+  if (sasl_setprop(conn->con_sasl->sac_server, SASL_SEC_PROPS, &sec_props) !=
+      SASL_OK) {
+    log_emit(conn->con_runtime->rt_config, LOG_NOTICE,
+	     "Failed to set security properties on SASL connection "
+	     "(server side) for %s: %s",
+	     connection_describe(conn, conn_desc, sizeof(conn_desc)),
+	     sasl_errdetail(conn->con_sasl->sac_server));
+    return 0;
+  }
+
+  /* Now do the client side */
+  if (conn->con_sasl->sac_client) {
+    /* First, the security strength factor on the client side */
+    if (sasl_setprop(conn->con_sasl->sac_client, SASL_SSF_EXTERNAL, &ssf) !=
+	SASL_OK) {
+      log_emit(conn->con_runtime->rt_config, LOG_NOTICE,
+	       "Failed to set security strength factor on SASL connection "
+	       "(client side) for %s: %s",
+	       connection_describe(conn, conn_desc, sizeof(conn_desc)),
+	       sasl_errdetail(conn->con_sasl->sac_client));
+      return 0;
+    }
+
+    /* Now the security properties */
+    if (sasl_setprop(conn->con_sasl->sac_client, SASL_SEC_PROPS, &sec_props) !=
+	SASL_OK) {
+      log_emit(conn->con_runtime->rt_config, LOG_NOTICE,
+	       "Failed to set security properties on SASL connection "
+	       "(client side) for %s: %s",
+	       connection_describe(conn, conn_desc, sizeof(conn_desc)),
+	       sasl_errdetail(conn->con_sasl->sac_client));
+      return 0;
+    }
+  }
+
+  return 1;
+}
+
+int
+sasl_set_external(connection_t *conn, const char *username)
+{
+  char conn_desc[ADDR_DESCRIPTION];
+
+  log_emit(conn->con_runtime->rt_config, LOG_DEBUG,
+	   "Setting external authentication ID of %s to %s",
+	   connection_describe(conn, conn_desc, sizeof(conn_desc)), username);
+
+  /* Set the authentication ID */
+  if (sasl_setprop(conn->con_sasl->sac_server, SASL_AUTH_EXTERNAL, username) !=
+      SASL_OK) {
+    log_emit(conn->con_runtime->rt_config, LOG_NOTICE,
+	     "Failed to set external authentication ID to \"%s\" for %s: %s",
+	     username, connection_describe(conn, conn_desc, sizeof(conn_desc)),
+	     sasl_errdetail(conn->con_sasl->sac_server));
+    return 0;
+  }
+
+  return 1;
 }
 
 void

@@ -31,6 +31,7 @@
 #include "include/endpoint.h"
 #include "include/interfaces.h"
 #include "include/log.h"
+#include "include/sasl_util.h"
 #include "include/ssl.h"
 #include "include/yaml_util.h"
 
@@ -412,6 +413,29 @@ proc_endpoint_port(const char *key, struct epconfig *epc,
 }
 
 static void
+proc_endpoint_ssf(const char *key, struct epconfig *epc,
+		  yaml_ctx_t *ctx, yaml_node_t *value)
+{
+  conf_ctx_t conf_ctx = CONF_CTX_YAML(ctx, value);
+  intmax_t ssf;
+
+  common_verify(epc->endpoint, EP_CONFIG_MAGIC);
+
+  /* Convert the value as an integer */
+  if (!yaml_get_int(ctx, value, &ssf)) {
+    epc->endpoint->epc_flags |= EP_CONFIG_INVALID;
+  } else if (ssf < 0) {
+    config_report(&conf_ctx, LOG_WARNING,
+		  "Invalid security strength factor %d; must be >= 0", ssf);
+    epc->endpoint->epc_flags |= EP_CONFIG_INVALID;
+  } else {
+    /* Save the security strength factor */
+    epc->endpoint->epc_ssf = ssf;
+    epc->endpoint->epc_flags |= EP_CONFIG_SSF_SET;
+  }
+}
+
+static void
 proc_endpoint_type(const char *key, struct epconfig *epc,
 		   yaml_ctx_t *ctx, yaml_node_t *value)
 {
@@ -457,6 +481,7 @@ static mapkeys_t endpoint_config[] = {
   MAPKEY("ip", proc_endpoint_ip),
   MAPKEY("local", proc_endpoint_local),
   MAPKEY("port", proc_endpoint_port),
+  MAPKEY("ssf", proc_endpoint_ssf),
   MAPKEY("type", proc_endpoint_type),
   MAPKEY("username", proc_endpoint_username),
 };
@@ -514,6 +539,25 @@ proc_facility(const char *key, config_t *conf, yaml_ctx_t *ctx,
     else if (!(conf->cf_flags & CONFIG_FACILITY_FIXED))
       conf->cf_facility = facility;
   }
+}
+
+static void
+proc_min_ssf(const char *key, config_t *conf, yaml_ctx_t *ctx,
+	     yaml_node_t *value)
+{
+  conf_ctx_t conf_ctx = CONF_CTX_YAML(ctx, value);
+  intmax_t ssf;
+
+  common_verify(conf, CONFIG_MAGIC);
+
+  /* Convert the value as an integer */
+  if (!yaml_get_int(ctx, value, &ssf))
+    return;
+  else if (ssf < 0)
+    config_report(&conf_ctx, LOG_WARNING,
+		  "Invalid security strength factor %d; must be >= 0", ssf);
+  else
+    conf->cf_min_ssf = ssf;
 }
 
 static void
@@ -697,6 +741,7 @@ static mapkeys_t top_level[] = {
   MAPKEY("debug", proc_debug),
   MAPKEY("endpoints", proc_endpoints),
   MAPKEY("facility", proc_facility),
+  MAPKEY("min_ssf", proc_min_ssf),
   MAPKEY("networks", proc_networks),
   MAPKEY("sasl", sasl_conf_processor),
   MAPKEY("ssl", ssl_conf_processor),
@@ -852,6 +897,9 @@ initialize_config(config_t *conf, int argc, char **argv)
     conf->cf_prog = tmp + 1;
   else
     conf->cf_prog = argv[0];
+
+  /* Initialize the minimum security strength factor */
+  conf->cf_min_ssf = DEFAULT_MINIMUM_SSF;
 
   /* Next, parse command line arguments */
   parse_args(conf, argc, argv);

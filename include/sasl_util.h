@@ -109,6 +109,24 @@ struct _sasl_connection_s {
  */
 #define SASL_CONNECTION_MAGIC 0xfa157908
 
+/** \brief Default minimum security strength factor.
+ *
+ * This is the default minimum security strength factor required for
+ * connections.  If a connection's current security strength factor is
+ * less than this value, the SASL library will be configured to omit
+ * plain-text mechanisms and to attempt to negotiate a security
+ * layer.
+ */
+#define DEFAULT_MINIMUM_SSF	56
+
+/** \brief Default security strength factor for local connections.
+ *
+ * This is the default security strength factor for local connections.
+ * It must be greater than the default minimum required security
+ * strength factor.
+ */
+#define DEFAULT_LOCAL_SSF	256
+
 /** \brief Process SASL configuration.
  *
  * This is the configuration processor specific to SASL.  It conforms
@@ -154,13 +172,45 @@ int initialize_sasl(config_t *conf);
  * This function is used to initialize the SASL connection context for
  * a connection.
  *
- * \param[in]		conn	The connection to initialize the
+ * \param[in,out]	conn	The connection to initialize the
  *				context for.
  *
- * \return	An allocated and initialized SASL connection context
- *		object, or \c NULL in the case of an error.
+ * \return	A true value if initialization succeeded, false
+ *		otherwise.  This sets the SASL connection context in
+ *		the connection object on success.
  */
-sasl_connection_t *sasl_connection_init(connection_t *conn);
+int sasl_connection_init(connection_t *conn);
+
+/** \brief Set security strength factor.
+ *
+ * A connection has a security strength factor which indicates how
+ * secure the connection is.  This function is used for setting that
+ * strength factor; it notifies the SASL library to ensure that
+ * authentication exchanges take an external strength factor into
+ * account.
+ *
+ * \param[in]		conn	The connection.
+ * \param[in]		ssf	The new security strength factor.
+ *
+ * \return	A true value if setting the security strength factor
+ *		is successful, false otherwise.
+ */
+int sasl_set_ssf(connection_t *conn, unsigned int ssf);
+
+/** \brief Set external authentication ID.
+ *
+ * This function notifies the SASL library that the authentication ID
+ * has been set externally.  It is called by connection_set_username()
+ * to communicate the username to the SASL library.
+ *
+ * \param[in]		conn	The connection.
+ * \param[in]		username
+ *				The externally-set authentication ID.
+ *
+ * \return	A true value if setting the external authentication ID
+ *		is successful, false otherwise.
+ */
+int sasl_set_external(connection_t *conn, const char *username);
 
 /** \brief Release a connection context.
  *

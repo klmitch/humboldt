@@ -129,6 +129,7 @@ struct _config_s {
   hash_tab_t	cf_networks;	/**< Networks hash table */
   sasl_conf_t  *cf_sasl;	/**< SASL configuration */
   ssl_conf_t   *cf_ssl;		/**< SSL configuration */
+  unsigned int	cf_min_ssf;	/**< Minimum security strength factor */
   interfaces_t *cf_interfaces;	/**< Cached interface information */
 };
 

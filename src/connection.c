@@ -191,7 +191,7 @@ connection_create(runtime_t *runtime, endpoint_t *endpoint,
   connection->con_magic = CONNECTION_MAGIC;
 
   /* Initialize SASL for this connection */
-  if (!(connection->con_sasl = sasl_connection_init(connection))) {
+  if (!sasl_connection_init(connection)) {
     log_emit(runtime->rt_config, LOG_WARNING,
 #ifdef WIN32
 	     "Unable to initialize SASL for %s (id %" PRIdPTR ")",
@@ -282,10 +282,18 @@ connection_set_username(connection_t *conn, const char *username,
   if (flags & CONN_USERNAME_COPY) {
     const char *tmp;
 
+    /* Allocate a new copy */
     if (!(tmp = strdup(username)))
       return 0;
-    else if (conn->con_username && (conn->con_flags & CONN_FLAG_FREE_USERNAME))
-      /* Have to free the old username */
+
+    /* Set it on the SASL connection before we free the old one */
+    if (!sasl_set_external(conn, tmp)) {
+      free((void *)tmp);
+      return 0;
+    }
+
+    /* Do we have to free the old username? */
+    if (conn->con_username && (conn->con_flags & CONN_FLAG_FREE_USERNAME))
       free((void *)conn->con_username);
 
     /* Save the new username */
@@ -294,6 +302,10 @@ connection_set_username(connection_t *conn, const char *username,
     /* It'll need to be freed */
     conn->con_flags |= CONN_FLAG_FREE_USERNAME;
   } else {
+    /* Set it on the SASL connection before we free the old one */
+    if (!sasl_set_external(conn, username))
+      return 0;
+
     /* Free the old username if needed */
     if (conn->con_username && (conn->con_flags & CONN_FLAG_FREE_USERNAME)) {
       free((void *)conn->con_username);

@@ -40,6 +40,7 @@
 #include "include/interfaces.h"
 #include "include/log.h"
 #include "include/runtime.h"
+#include "include/sasl_util.h"
 #include "include/yaml_util.h"
 
 static freelist_t advertisements = FREELIST_INIT(ep_ad_t, 0);
@@ -616,6 +617,16 @@ ep_config_finish(ep_config_t *ep_conf, config_t *conf, conf_ctx_t *ctx)
   /* Set the default port as needed */
   if (!(ep_conf->epc_addr.ea_flags & (EA_LOCAL | EA_PORT)))
     ep_addr_set_port(&ep_conf->epc_addr, DEFAULT_PORT, ctx);
+
+  /* Set the default security strength factor */
+  if (!(ep_conf->epc_flags & EP_CONFIG_SSF_SET)) {
+    if (ep_conf->epc_addr.ea_flags & EA_LOCAL)
+      ep_conf->epc_ssf = DEFAULT_LOCAL_SSF;
+    else
+      ep_conf->epc_ssf = 0;
+
+    ep_conf->epc_flags |= EP_CONFIG_SSF_SET;
+  }
 
   /* Add the endpoint to the configuration */
   switch (hash_add(&conf->cf_endpoints, &ep_conf->epc_hashent)) {

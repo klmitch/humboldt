@@ -123,6 +123,7 @@ ssl_free(ssl_conn_t scon)
 #include <string.h>
 
 #include "include/alloc.h"
+#include "include/sasl_util.h"
 
 #define SESSION_CACHE_ID	"Humboldt"
 
@@ -553,9 +554,17 @@ ssl_event(connection_t *conn, short events)
     /* Clear the handshake flag */
     conn->con_flags &= ~CONN_FLAG_TLS_HANDSHAKE;
 
-    /* Update the connection state */
-    if (!connection_set_state(conn, CONN_STATE_SEC, 0, CONN_STATE_FLAGS_SET))
+    /* Update the security strength factor */
+    if (!sasl_set_ssf(conn, SSL_get_cipher_bits(scon->scon_ssl, 0))) {
       connection_destroy(conn, 1);
+      return 1;
+    }
+
+    /* Update the connection state */
+    if (!connection_set_state(conn, CONN_STATE_SEC, 0, CONN_STATE_FLAGS_SET)) {
+      connection_destroy(conn, 1);
+      return 1;
+    }
 
     /* Now, let's see if we have a peer certificate */
     if (!(cert = SSL_get_peer_certificate(scon->scon_ssl)))
