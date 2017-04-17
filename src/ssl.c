@@ -81,8 +81,8 @@ ssl_process(protocol_buf_t *msg, connection_t *conn)
 
   /* ...then send back an error */
   if (!protocol_buf_send(&pbuf, conn)) {
-    log_emit(conn->con_runtime->rt_config, LOG_WARNING,
-	     "Out of memory constructing TLS error packet for %s",
+    log_emit(conn->con_runtime->rt_config, LOG_NOTICE,
+	     "Failed to send TLS error packet for %s",
 	     connection_describe(conn, conn_desc, sizeof(conn_desc)));
     return PBR_CONNECTION_CLOSE;
   }
@@ -498,8 +498,8 @@ ssl_process(protocol_buf_t *msg, connection_t *conn)
 
     /* Send back an error */
     if (!protocol_buf_send(&pbuf, conn)) {
-      log_emit(conn->con_runtime->rt_config, LOG_WARNING,
-	       "Out of memory constructing TLS error packet for %s",
+      log_emit(conn->con_runtime->rt_config, LOG_NOTICE,
+	       "Failed to send TLS error packet for %s",
 	       connection_describe(conn, conn_desc, sizeof(conn_desc)));
       return PBR_CONNECTION_CLOSE;
     }
