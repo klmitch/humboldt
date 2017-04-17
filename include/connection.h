@@ -57,7 +57,8 @@ typedef enum _conn_error_e {
 #include "endpoint.h"		/* for endpoint types */
 #include "runtime.h"		/* for runtime_t */
 #include "protocol.h"		/* for protocol_buf_t */
-#include "ssl.h"
+#include "sasl_util.h"		/* for sasl_connection_t */
+#include "ssl.h"		/* for ssl_conn_t */
 
 /** \brief Connection state structure.
  *
@@ -124,6 +125,8 @@ struct _connection_s {
   struct bufferevent
 	       *con_root;	/**< Root bufferevent for socket */
   ssl_conn_t	con_ssl;	/**< TLS data for the connection */
+  sasl_connection_t
+	       *con_sasl;	/**< SASL connection context */
   evutil_socket_t
 		con_socket;	/**< Connection socket */
   runtime_t    *con_runtime;	/**< Humboldt runtime */

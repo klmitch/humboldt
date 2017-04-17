@@ -17,6 +17,7 @@
 #ifndef _HUMBOLDT_SASL_UTIL_H
 #define _HUMBOLDT_SASL_UTIL_H
 
+#include <sasl/sasl.h>		/* for sasl_conn_t */
 #include <stdlib.h>		/* for size_t */
 
 /** \brief SASL configuration.
@@ -34,8 +35,18 @@ typedef struct _sasl_conf_s sasl_conf_t;
  */
 typedef struct _sasl_option_s sasl_option_t;
 
+/** \brief SASL connection context.
+ *
+ * Connection context specific to SASL.  This will contain the SASL
+ * connection context for both server and client.  It will also
+ * contain the libevent bufferevent for any security layer that has
+ * been negotiated.
+ */
+typedef struct _sasl_connection_s sasl_connection_t;
+
 #include "common.h"		/* for magic_t */
 #include "configuration.h"	/* for config_t, conf_ctx_t */
+#include "connection.h"		/* for connection_t */
 #include "db.h"			/* for hash_tab_t, hash_ent_t */
 #include "yaml_util.h"		/* for yaml_ctx_t, yaml_node_t */
 
@@ -77,6 +88,27 @@ struct _sasl_option_s {
  */
 #define SASL_OPTION_MAGIC 0x1b9b2ac9
 
+/** \brief SASL connection context structure.
+ *
+ * This structure contains the definition of the SASL connection
+ * context.
+ */
+struct _sasl_connection_s {
+  magic_t	sac_magic;	/**< Magic number */
+  sasl_conn_t  *sac_server;	/**< Server-side connection context */
+  sasl_conn_t  *sac_client;	/**< Client-side connection context */
+  struct bufferevent
+	       *sac_bev;	/**< Libevent bufferevent for SASL */
+};
+
+/** \brief SASL connection context magic number.
+ *
+ * This is the magic number used for the SASL connection context
+ * structure.  It is used to guard against programming problems, such
+ * passing an uninitialized SASL connection context.
+ */
+#define SASL_CONNECTION_MAGIC 0xfa157908
+
 /** \brief Process SASL configuration.
  *
  * This is the configuration processor specific to SASL.  It conforms
@@ -116,5 +148,31 @@ void sasl_conf_free(sasl_conf_t *conf);
  *		otherwise.
  */
 int initialize_sasl(config_t *conf);
+
+/** \brief Allocate and initialize connection context.
+ *
+ * This function is used to initialize the SASL connection context for
+ * a connection.
+ *
+ * \param[in]		conn	The connection to initialize the
+ *				context for.
+ *
+ * \return	An allocated and initialized SASL connection context
+ *		object, or \c NULL in the case of an error.
+ */
+sasl_connection_t *sasl_connection_init(connection_t *conn);
+
+/** \brief Release a connection context.
+ *
+ * This function releases a SASL connection context for a connection,
+ * disposing of the SASL library connection information and shutting
+ * down any negotiated security layer.  The SASL connection context
+ * should not be referenced after this call.
+ *
+ * \param[in,out]	sasl_conn
+ *				The SASL connection context to
+ *				release.
+ */
+void sasl_connection_release(sasl_connection_t *sasl_conn);
 
 #endif /* _HUMBOLDT_SASL_UTIL_H */

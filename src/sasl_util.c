@@ -16,18 +16,25 @@
 
 #include <config.h>
 
+#include <event2/bufferevent.h>
+#include <event2/util.h>
 #include <sasl/sasl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include "include/alloc.h"
 #include "include/configuration.h"
+#include "include/connection.h"
 #include "include/log.h"
 #include "include/sasl_util.h"
 #include "include/yaml_util.h"
 
 #define HUMBOLDT_APPNAME	"Humboldt"
+#define HUMBOLDT_SVCNAME	"humboldt"
 #define MAX_SASL_CALLBACKS	2
+
+static freelist_t connections = FREELIST_INIT(sasl_connection_t, 0);
 
 static void
 proc_sasl_conf(const char *key, sasl_conf_t *sasl_conf, yaml_ctx_t *ctx,
@@ -252,4 +259,118 @@ initialize_sasl(config_t *conf)
 
   log_emit(conf, LOG_INFO, "SASL initialized");
   return 1;
+}
+
+sasl_connection_t *
+sasl_connection_init(connection_t *conn)
+{
+#ifdef INET6_ADDRSTRLEN
+  char addrbuf[INET6_ADDRSTRLEN + 1];
+#else
+  char addrbuf[INET_ADDRSTRLEN + 1];
+#endif
+  char srvbuf[ADDR_DESCRIPTION], *srvaddr = srvbuf;
+  char clibuf[ADDR_DESCRIPTION], *cliaddr = clibuf;
+  const void *local_ipaddr, *remote_ipaddr;
+  int local_port, remote_port, result;
+  sasl_connection_t *sasl_conn;
+
+  common_verify(conn, CONNECTION_MAGIC);
+
+  /* Begin by allocating a connection object */
+  if (!(sasl_conn = alloc(&connections))) {
+    log_emit(conn->con_runtime->rt_config, LOG_WARNING,
+	     "Out of memory allocating SASL connection information");
+    return 0;
+  }
+
+  /* Next, format the addresses */
+  if (conn->con_endpoint->ep_addr.ea_flags & EA_LOCAL) {
+    /* Local port.  Could use a local host address, but which one? */
+    cliaddr = 0;
+    srvaddr = 0;
+  } else {
+    /* Pick out the addresses and ports */
+#ifdef AF_INET6
+    if (conn->con_endpoint->ep_addr.ea_addr.eau_addr.sa_family == AF_INET6) {
+      local_ipaddr = (void *)&conn->con_endpoint->ep_addr
+	.ea_addr.eau_ip6.sin6_addr;
+      local_port = conn->con_endpoint->ep_addr.ea_addr.eau_ip6.sin6_port;
+      remote_ipaddr = (void *)&conn->con_remote.ea_addr.eau_ip6.sin6_addr;
+      remote_port = conn->con_remote.ea_addr.eau_ip6.sin6_port;
+    } else {
+#endif
+      local_ipaddr = (void *)&conn->con_endpoint->ep_addr
+	.ea_addr.eau_ip4.sin_addr;
+      local_port = conn->con_endpoint->ep_addr.ea_addr.eau_ip4.sin_port;
+      remote_ipaddr = (void *)&conn->con_remote.ea_addr.eau_ip4.sin_addr;
+      remote_port = conn->con_remote.ea_addr.eau_ip4.sin_port;
+#ifdef AF_INET6
+    }
+#endif
+
+    /* Format them for SASL */
+    snprintf(srvbuf, sizeof(srvbuf), "%s;%d",
+	     evutil_inet_ntop(conn->con_remote.ea_addr.eau_addr.sa_family,
+			      local_ipaddr, addrbuf, sizeof(addrbuf)),
+	     ntohs(local_port));
+    snprintf(clibuf, sizeof(clibuf), "%s;%d",
+	     evutil_inet_ntop(conn->con_remote.ea_addr.eau_addr.sa_family,
+			      remote_ipaddr, addrbuf, sizeof(addrbuf)),
+	     ntohs(remote_port));
+  }
+
+  /* Initialize the server side of SASL */
+  if ((result = sasl_server_new(HUMBOLDT_SVCNAME, 0, 0, srvaddr, cliaddr,
+				0, SASL_SUCCESS_DATA,
+				&sasl_conn->sac_server)) != SASL_OK) {
+    log_emit(conn->con_runtime->rt_config, LOG_NOTICE,
+	     "Failed to initialize SASL connection (server side): %s",
+	     sasl_errstring(result, 0, 0));
+    release(&connections, sasl_conn);
+    return 0;
+  }
+
+  /* Initialize the client side of SASL, if needed */
+  if (conn->con_type == ENDPOINT_PEER &&
+      (result = sasl_client_new(HUMBOLDT_SVCNAME, 0, srvaddr, cliaddr,
+				0, SASL_SUCCESS_DATA,
+				&sasl_conn->sac_client)) != SASL_OK) {
+    log_emit(conn->con_runtime->rt_config, LOG_NOTICE,
+	     "Failed to initialize SASL connection (client side): %s",
+	     sasl_errstring(result, 0, 0));
+    sasl_dispose(&sasl_conn->sac_server);
+    sasl_conn->sac_server = 0;
+    release(&connections, sasl_conn);
+    return 0;
+  } else
+    sasl_conn->sac_client = 0;
+
+  /* Finish initializing the connection information */
+  sasl_conn->sac_bev = 0;
+  sasl_conn->sac_magic = SASL_CONNECTION_MAGIC;
+
+  return sasl_conn;
+}
+
+void
+sasl_connection_release(sasl_connection_t *sasl_conn)
+{
+  common_verify(sasl_conn, SASL_CONNECTION_MAGIC);
+
+  /* Dispose of the server and client connection contexts */
+  if (sasl_conn->sac_server)
+    sasl_dispose(&sasl_conn->sac_server);
+  if (sasl_conn->sac_client)
+    sasl_dispose(&sasl_conn->sac_client);
+  sasl_conn->sac_server = 0;
+  sasl_conn->sac_client = 0;
+
+  /* If a security layer was created, dispose of it as well */
+  if (sasl_conn->sac_bev)
+    bufferevent_free(sasl_conn->sac_bev);
+  sasl_conn->sac_bev = 0;
+
+  /* Release the memory */
+  release(&connections, sasl_conn);
 }

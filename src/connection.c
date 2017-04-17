@@ -35,6 +35,8 @@
 #include "include/endpoint.h"
 #include "include/log.h"
 #include "include/protocol.h"
+#include "include/sasl_util.h"
+#include "include/ssl.h"
 
 static freelist_t connections = FREELIST_INIT(connection_t, 0);
 
@@ -151,6 +153,7 @@ connection_create(runtime_t *runtime, endpoint_t *endpoint,
   connection->con_bev = 0;
   connection->con_root = 0;
   connection->con_ssl = 0;
+  connection->con_sasl = 0;
   connection->con_socket = sock;
   connection->con_runtime = runtime;
 
@@ -187,6 +190,21 @@ connection_create(runtime_t *runtime, endpoint_t *endpoint,
   /* Set the magic number, now that it's valid */
   connection->con_magic = CONNECTION_MAGIC;
 
+  /* Initialize SASL for this connection */
+  if (!(connection->con_sasl = sasl_connection_init(connection))) {
+    log_emit(runtime->rt_config, LOG_WARNING,
+#ifdef WIN32
+	     "Unable to initialize SASL for %s (id %" PRIdPTR ")",
+#else
+	     "Unable to initialize SASL for %s (id %d)",
+#endif
+	     ep_addr_describe(addr, address, sizeof(address)), sock);
+    bufferevent_free(connection->con_root);
+    evutil_closesocket(sock);
+    release(&connections, connection);
+    return 0;
+  }
+
   /* Install the root bufferevent */
   if (!connection_install(connection, connection->con_root)) {
     log_emit(runtime->rt_config, LOG_WARNING,
@@ -196,6 +214,7 @@ connection_create(runtime_t *runtime, endpoint_t *endpoint,
 	     "Unable to install bufferevent for %s (id %d)",
 #endif
 	     ep_addr_describe(addr, address, sizeof(address)), sock);
+    sasl_connection_release(connection->con_sasl);
     bufferevent_free(connection->con_root);
     evutil_closesocket(sock);
     release(&connections, connection);
@@ -462,6 +481,10 @@ connection_destroy(connection_t *conn, int immediate)
   if (conn->con_username && (conn->con_flags & CONN_FLAG_FREE_USERNAME))
     free((void *)conn->con_username);
   conn->con_username = 0;
+
+  /* Release the SASL context */
+  sasl_connection_release(conn->con_sasl);
+  conn->con_sasl = 0;
 
   /* Free and zero the SSL object */
   if (conn->con_ssl)
