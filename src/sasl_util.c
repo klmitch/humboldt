@@ -473,6 +473,75 @@ sasl_set_external(connection_t *conn, const char *username)
   return 1;
 }
 
+pbuf_result_t
+sasl_process(protocol_buf_t *msg, connection_t *conn)
+{
+  char conn_desc[ADDR_DESCRIPTION];
+  protocol_buf_t pbuf = PROTOCOL_BUF_INIT(0, PROTOCOL_SASL);
+  char mechname[SASL_MECHNAMEMAX + 1];
+  uint8_t mechname_len = 0;
+  pbuf_pos_t pos = PBUF_POS_INIT();
+
+  common_verify(msg, PROTOCOL_BUF_MAGIC);
+  common_verify(conn, CONNECTION_MAGIC);
+
+  /* Handle the message bits */
+  if (msg->pb_flags & PROTOCOL_ERROR)
+    /* Right now, we only operate server-side, so nothing to do */
+    return PBR_MSG_PROCESSED;
+  else if (msg->pb_flags & PROTOCOL_REPLY)
+    /* IBID */
+    return PBR_MSG_PROCESSED;
+
+  /* Extract the mechanism name length */
+  if (!protocol_buf_get_uint8(msg, &pos, &mechname_len) ||
+      (mechname_len != 255 &&
+       (mechname_len > SASL_MECHNAMEMAX ||
+	mechname_len > pbp_remaining(&pos, msg)))) {
+    connection_report_error(conn, CONN_ERR_MALFORMED_MSG, 3);
+    return PBR_CONNECTION_CLOSE;
+  }
+
+  /* Is it asking for a list of mechanisms? */
+  if (mechname_len == 255) {
+    const char *mechlist;
+    unsigned int mechlist_len;
+
+    /* Get the list of mechanisms */
+    if (sasl_listmech(conn->con_sasl->sac_server, 0, "", " ", "",
+		      &mechlist, &mechlist_len, 0) != SASL_OK) {
+      const char *detail = sasl_errdetail(conn->con_sasl->sac_server);
+      log_emit(conn->con_runtime->rt_config, LOG_NOTICE,
+	       "Unable to generate list of SASL mechanisms for %s: %s",
+	       connection_describe(conn, conn_desc, sizeof(conn_desc)),
+	       detail);
+      pbuf.pb_flags = PROTOCOL_ERROR;
+      protocol_buf_append(&pbuf, (unsigned char *)detail, strlen(detail));
+      protocol_buf_send(&pbuf, conn);
+      protocol_buf_free(&pbuf);
+      return PBR_MSG_PROCESSED;
+    }
+
+    /* Send it */
+    if (!protocol_buf_add_uint8(&pbuf, 255) ||
+	!protocol_buf_append(&pbuf, (unsigned char *)mechlist, mechlist_len) ||
+	!protocol_buf_send(&pbuf, conn)) {
+      log_emit(conn->con_runtime->rt_config, LOG_NOTICE,
+	       "Unable to send list of SASL mechanisms to %s",
+	       connection_describe(conn, conn_desc, sizeof(conn_desc)));
+      protocol_buf_free(&pbuf);
+      return PBR_CONNECTION_CLOSE;
+    }
+
+    protocol_buf_free(&pbuf);
+    return PBR_MSG_PROCESSED;
+  } else if (mechname_len > 0)
+    /* Copy out the mechanism name; can't fail */
+    protocol_buf_extract(msg, &pos, (unsigned char *)mechname, mechname_len);
+
+  return PBR_MSG_PROCESSED;
+}
+
 void
 sasl_connection_release(sasl_connection_t *sasl_conn)
 {

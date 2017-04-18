@@ -58,7 +58,8 @@ typedef enum _pbuf_result_e {
 typedef enum _protocol_e {
   PROTOCOL_CONNSTATE,		/**< Connection state messages */
   PROTOCOL_PING,		/**< Ping messages */
-  PROTOCOL_TLS			/**< StartTLS messages */
+  PROTOCOL_TLS,			/**< StartTLS messages */
+  PROTOCOL_SASL			/**< SASL messages */
 } protocol_t;
 
 /** \brief Protocol dispatch function.

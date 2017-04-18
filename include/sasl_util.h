@@ -48,6 +48,7 @@ typedef struct _sasl_connection_s sasl_connection_t;
 #include "configuration.h"	/* for config_t, conf_ctx_t */
 #include "connection.h"		/* for connection_t */
 #include "db.h"			/* for hash_tab_t, hash_ent_t */
+#include "protocol.h"		/* for pbuf_result_t */
 #include "yaml_util.h"		/* for yaml_ctx_t, yaml_node_t */
 
 /** \brief SASL configuration structure.
@@ -211,6 +212,19 @@ int sasl_set_ssf(connection_t *conn, unsigned int ssf);
  *		is successful, false otherwise.
  */
 int sasl_set_external(connection_t *conn, const char *username);
+
+/** \brief Process received SASL messages.
+ *
+ * This is a protocol dispatch routine which is used to process
+ * received SASL exchange protocol messages.
+ *
+ * \param[in]		msg	The received message to process.
+ * \param[in,out]	conn	The connection the message came in
+ *				on.
+ *
+ * \return	One of the #pbuf_result_t values.
+ */
+pbuf_result_t sasl_process(protocol_buf_t *msg, connection_t *conn);
 
 /** \brief Release a connection context.
  *

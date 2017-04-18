@@ -27,6 +27,7 @@
 #include "include/connection.h"
 #include "include/log.h"
 #include "include/protocol.h"
+#include "include/sasl_util.h"
 #include "include/ssl.h"
 
 static pbuf_result_t ping_process(protocol_buf_t *msg, connection_t *conn);
@@ -34,7 +35,8 @@ static pbuf_result_t ping_process(protocol_buf_t *msg, connection_t *conn);
 static pbuf_dispatch_t processors[] = {
   connection_process,		/* Protocol 0: Connection state */
   ping_process,			/* Protocol 1: PING/PONG */
-  ssl_process			/* Protocol 2: SSL */
+  ssl_process,			/* Protocol 2: SSL */
+  sasl_process			/* Protocol 3: SASL */
 };
 
 static freelist_t messages = FREELIST_INIT(protocol_buf_t, 0);
