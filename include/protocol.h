@@ -50,6 +50,17 @@ typedef enum _pbuf_result_e {
   PBR_CONNECTION_CLOSE		/**< Message processed, connection closed */
 } pbuf_result_t;
 
+/** \brief Protocol values.
+ *
+ * This enumeration contains all the protocol numbers that Humboldt
+ * knows about.
+ */
+typedef enum _protocol_e {
+  PROTOCOL_CONNSTATE,		/**< Connection state messages */
+  PROTOCOL_PING,		/**< Ping messages */
+  PROTOCOL_TLS			/**< StartTLS messages */
+} protocol_t;
+
 /** \brief Protocol dispatch function.
  *
  * Protocol processors are registered by listing a function possessing
@@ -181,6 +192,9 @@ struct _pbuf_pos_s {
  *				themselves.
  */
 #define pbp_incr(pbp, incr)	((pbp)->pbp_pos += (incr))
+
+#define pbp_remaining(pbp, pbuf)				\
+  ((pbuf)->pb_count - (pbp)->pbp_pos + PROTOCOL_HEADER_SIZE)
 
 /** \brief Determine if position is at end.
  *

@@ -327,7 +327,7 @@ int
 connection_send_state(connection_t *conn)
 {
   char conn_desc[ADDR_DESCRIPTION];
-  protocol_buf_t pbuf = PROTOCOL_BUF_INIT(PROTOCOL_REPLY, 0);
+  protocol_buf_t pbuf = PROTOCOL_BUF_INIT(PROTOCOL_REPLY, PROTOCOL_CONNSTATE);
 
   /* Give a hint as to the packet size */
   if (!protocol_buf_hint(&pbuf, 20)) {
@@ -392,7 +392,7 @@ void
 connection_report_error(connection_t *conn, conn_error_t error, ...)
 {
   char conn_desc[ADDR_DESCRIPTION], errmsg[1024] = "";
-  protocol_buf_t pbuf = PROTOCOL_BUF_INIT(PROTOCOL_ERROR, 0);
+  protocol_buf_t pbuf = PROTOCOL_BUF_INIT(PROTOCOL_ERROR, PROTOCOL_CONNSTATE);
   va_list ap;
 
   common_verify(conn, CONNECTION_MAGIC);

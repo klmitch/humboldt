@@ -55,7 +55,7 @@ pbuf_result_t
 ssl_process(protocol_buf_t *msg, connection_t *conn)
 {
   char conn_desc[ADDR_DESCRIPTION];
-  protocol_buf_t pbuf = PROTOCOL_BUF_INIT(PROTOCOL_ERROR, 2);
+  protocol_buf_t pbuf = PROTOCOL_BUF_INIT(PROTOCOL_ERROR, PROTOCOL_TLS);
 
   common_verify(msg, PROTOCOL_BUF_MAGIC);
   common_verify(conn, CONNECTION_MAGIC);
@@ -410,7 +410,7 @@ ssl_process(protocol_buf_t *msg, connection_t *conn)
 {
   struct ssl_conn_s *scon;
   char conn_desc[ADDR_DESCRIPTION];
-  protocol_buf_t pbuf = PROTOCOL_BUF_INIT(PROTOCOL_ERROR, 2);
+  protocol_buf_t pbuf = PROTOCOL_BUF_INIT(PROTOCOL_ERROR, PROTOCOL_TLS);
 
   common_verify(msg, PROTOCOL_BUF_MAGIC);
   common_verify(conn, CONNECTION_MAGIC);
