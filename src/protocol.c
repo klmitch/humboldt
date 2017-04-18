@@ -47,7 +47,7 @@ static freelist_t messages = FREELIST_INIT(protocol_buf_t, 0);
     pbuf_pos_t *_pbp = (pbp);						\
     common_verify(_pbuf, PROTOCOL_BUF_MAGIC);				\
     if (_pbp->pbp_pos < 0 ||						\
-	_pbp->pbp_pos + (count) - PROTOCOL_HEADER_SIZE < _pbuf->pb_count) \
+	_pbp->pbp_pos + (count) + PROTOCOL_HEADER_SIZE > _pbuf->pb_count) \
       return 0;								\
   } while (0)
 
