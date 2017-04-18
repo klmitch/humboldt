@@ -417,6 +417,16 @@ connection_report_error(connection_t *conn, conn_error_t error, ...)
       snprintf(errmsg, sizeof(errmsg), "Unrecognized protocol %d", proto);
     }
     break;
+
+  case CONN_ERR_MALFORMED_MSG:
+    {
+      /* Add the protocol to the error packet */
+      unsigned int proto = va_arg(ap, unsigned int);
+      protocol_buf_add_uint8(&pbuf, proto);
+
+      snprintf(errmsg, sizeof(errmsg), "Malformed protocol %d message", proto);
+    }
+    break;
   }
 
   /* Make a best effort to send the message */

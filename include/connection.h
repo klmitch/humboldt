@@ -50,7 +50,8 @@ typedef enum _conn_status_e {
  */
 typedef enum _conn_error_e {
   CONN_ERR_NO_ERROR,		/**< No error has occurred */
-  CONN_ERR_UNKNOWN_PROTOCOL	/**< Protocol is unknown */
+  CONN_ERR_UNKNOWN_PROTOCOL,	/**< Protocol is unknown */
+  CONN_ERR_MALFORMED_MSG	/**< Message is malformed */
 } conn_error_t;
 
 #include "common.h"		/* for magic_t */
