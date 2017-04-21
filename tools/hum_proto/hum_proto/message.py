@@ -596,6 +596,8 @@ class ConnectionState(Message):
     # values
     status = enum.EnumSet(
         enum.Enum('INITIAL', 0),
+        enum.Enum('CLIENT', 1),
+        enum.Enum('AUTH', 2),
         enum.Enum('ERROR', 255),
     ).attr
 

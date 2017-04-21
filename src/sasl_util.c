@@ -477,10 +477,13 @@ pbuf_result_t
 sasl_process(protocol_buf_t *msg, connection_t *conn)
 {
   char conn_desc[ADDR_DESCRIPTION];
-  protocol_buf_t pbuf = PROTOCOL_BUF_INIT(0, PROTOCOL_SASL);
-  char mechname[SASL_MECHNAMEMAX + 1];
+  protocol_buf_t pbuf = PROTOCOL_BUF_INIT(PROTOCOL_REPLY, PROTOCOL_SASL);
+  char mechname[SASL_MECHNAMEMAX + 1] = "";
   uint8_t mechname_len = 0;
   pbuf_pos_t pos = PBUF_POS_INIT();
+  const char *out_data;
+  unsigned int out_len;
+  int result;
 
   common_verify(msg, PROTOCOL_BUF_MAGIC);
   common_verify(conn, CONNECTION_MAGIC);
@@ -516,7 +519,7 @@ sasl_process(protocol_buf_t *msg, connection_t *conn)
 	       connection_describe(conn, conn_desc, sizeof(conn_desc)),
 	       detail);
       pbuf.pb_flags = PROTOCOL_ERROR;
-      protocol_buf_append(&pbuf, (unsigned char *)detail, strlen(detail));
+      protocol_buf_append(&pbuf, detail, -1);
       protocol_buf_send(&pbuf, conn);
       protocol_buf_free(&pbuf);
       return PBR_MSG_PROCESSED;
@@ -524,7 +527,7 @@ sasl_process(protocol_buf_t *msg, connection_t *conn)
 
     /* Send it */
     if (!protocol_buf_add_uint8(&pbuf, 255) ||
-	!protocol_buf_append(&pbuf, (unsigned char *)mechlist, mechlist_len) ||
+	!protocol_buf_append(&pbuf, mechlist, mechlist_len) ||
 	!protocol_buf_send(&pbuf, conn)) {
       log_emit(conn->con_runtime->rt_config, LOG_NOTICE,
 	       "Unable to send list of SASL mechanisms to %s",
@@ -538,6 +541,69 @@ sasl_process(protocol_buf_t *msg, connection_t *conn)
   } else if (mechname_len > 0)
     /* Copy out the mechanism name; can't fail */
     protocol_buf_extract(msg, &pos, (unsigned char *)mechname, mechname_len);
+
+  /* Are we starting or continuing authentication? */
+  if (conn->con_flags & CONN_FLAG_SASL_INPROGRESS) {
+    log_emit(conn->con_runtime->rt_config, LOG_DEBUG,
+	     "Starting %s SASL exchange with %s", mechname,
+	     connection_describe(conn, conn_desc, sizeof(conn_desc)));
+    result = sasl_server_step(conn->con_sasl->sac_server,
+			      pbp_data(&pos, msg),
+			      pbp_remaining(&pos, msg),
+			      &out_data,
+			      &out_len);
+  } else {
+    /* Starting it */
+    conn->con_flags |= CONN_FLAG_SASL_INPROGRESS;
+    result = sasl_server_start(conn->con_sasl->sac_server,
+			       mechname,
+			       pbp_data(&pos, msg),
+			       pbp_remaining(&pos, msg),
+			       &out_data,
+			       &out_len);
+  }
+
+  switch (result) {
+  case SASL_OK:
+    /* Authentication complete! */
+    conn->con_flags &= CONN_FLAG_SASL_INPROGRESS;
+    log_emit(conn->con_runtime->rt_config, LOG_DEBUG,
+	     "Completed SASL exchange with %s",
+	     connection_describe(conn, conn_desc, sizeof(conn_desc)));
+    if (!connection_set_state(conn, 0, conn->con_type == ENDPOINT_CLIENT ?
+			      CONN_STAT_CLIENT : CONN_STAT_AUTH,
+			      CONN_STATE_STATUS))
+      return PBR_CONNECTION_CLOSE;
+    break;
+
+  case SASL_CONTINUE:
+    /* More protocol exchanges needed */
+    if (!protocol_buf_add_uint8(&pbuf, 0) ||
+	!protocol_buf_append(&pbuf, out_data, out_len) ||
+	!protocol_buf_send(&pbuf, conn)) {
+      log_emit(conn->con_runtime->rt_config, LOG_NOTICE,
+	       "Unable to continue SASL authentication exchange to %s",
+	       connection_describe(conn, conn_desc, sizeof(conn_desc)));
+      protocol_buf_free(&pbuf);
+      return PBR_CONNECTION_CLOSE;
+    }
+    protocol_buf_free(&pbuf);
+    break;
+
+  default:
+    /* An error occurred; repurpose out_data for error message */
+    out_data = sasl_errdetail(conn->con_sasl->sac_server);
+    log_emit(conn->con_runtime->rt_config, LOG_NOTICE,
+	     "Authentication failed for %s: %s",
+	     connection_describe(conn, conn_desc, sizeof(conn_desc)),
+	     out_data);
+    pbuf.pb_flags = PROTOCOL_ERROR;
+    protocol_buf_append(&pbuf, out_data, -1);
+    protocol_buf_send(&pbuf, conn);
+    protocol_buf_free(&pbuf);
+    return PBR_CONNECTION_CLOSE;
+    break; /* not reached */
+  }
 
   return PBR_MSG_PROCESSED;
 }

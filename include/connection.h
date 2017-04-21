@@ -40,6 +40,8 @@ typedef struct _connection_s connection_t;
  */
 typedef enum _conn_status_e {
   CONN_STAT_INITIAL = 0,	/**< Connection is in INITIAL status */
+  CONN_STAT_CLIENT,		/**< Connection is in CLIENT status */
+  CONN_STAT_AUTH,		/**< Connection is in AUTH status */
   CONN_STAT_ERROR = 255		/**< Connection is in ERROR status */
 } conn_status_t;
 
@@ -147,7 +149,7 @@ struct _connection_s {
  * This is usually sent in the event that there is data in the output
  * buffer for the connection.
  */
-#define CONN_FLAG_CLOSING	0x80000000
+#define CONN_FLAG_CLOSING		0x80000000
 
 /** \brief Connection is in a TLS handshake.
  *
@@ -156,7 +158,7 @@ struct _connection_s {
  * received and processed, and alters the way that the connection
  * event processing is handled.
  */
-#define CONN_FLAG_TLS_HANDSHAKE	0x40000000
+#define CONN_FLAG_TLS_HANDSHAKE		0x40000000
 
 /** \brief Connection username should be freed.
  *
@@ -164,7 +166,14 @@ struct _connection_s {
  * connection contains allocated memory that should be released when
  * the connection is.
  */
-#define CONN_FLAG_FREE_USERNAME	0x20000000
+#define CONN_FLAG_FREE_USERNAME		0x20000000
+
+/** \brief SASL exchange in progress.
+ *
+ * This non-state flag indicates that a SASL exchange is in progress
+ * on the connection.
+ */
+#define CONN_FLAG_SASL_INPROGRESS	0x10000000
 
 /** \brief Allocate and initialize a connection.
  *
