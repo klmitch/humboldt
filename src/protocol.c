@@ -56,9 +56,13 @@ static freelist_t messages = FREELIST_INIT(protocol_buf_t, 0);
 #define pos_to_off(pbp)	((pos)->pbp_pos + PROTOCOL_HEADER_SIZE)
 
 int
-protocol_buf_append(protocol_buf_t *pbuf, unsigned char *data, size_t datalen)
+protocol_buf_append(protocol_buf_t *pbuf, const char *data, ev_ssize_t datalen)
 {
   /* protocol_buf_hint() will validate pbuf, so no call to common_verify() */
+
+  /* Get the data length */
+  if (datalen < 0)
+    datalen = strlen(data);
 
   /* Make sure there's enough space */
   if (!protocol_buf_hint(pbuf, pbuf->pb_count + datalen))

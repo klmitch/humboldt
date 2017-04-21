@@ -18,6 +18,7 @@
 #define _HUMBOLDT_PROTOCOL_H
 
 #include <event2/buffer.h>	/* for struct evbuffer */
+#include <event2/util.h>	/* for ev_ssize_t */
 #include <stdint.h>		/* for uint*_t */
 #include <stdlib.h>		/* for size_t */
 
@@ -194,8 +195,34 @@ struct _pbuf_pos_s {
  */
 #define pbp_incr(pbp, incr)	((pbp)->pbp_pos += (incr))
 
+/** \brief Remaining data in a protocol buffer.
+ *
+ * This macro, given a position and a protocol buffer, determines how
+ * much data is left in a protocol buffer from that position.
+ *
+ * \param[in]		pbp	The protocol buffer position.
+ * \param[in]		pbuf	The protocol buffer.
+ *
+ * \return	The amount of data left in the protocol buffer beyond
+ *		the current position.
+ */
 #define pbp_remaining(pbp, pbuf)				\
-  ((pbuf)->pb_count - (pbp)->pbp_pos + PROTOCOL_HEADER_SIZE)
+  ((pbuf)->pb_count - ((pbp)->pbp_pos + PROTOCOL_HEADER_SIZE))
+
+/** \brief Obtain remaining data from a protocol buffer.
+ *
+ * This macro, given a position and a protocol buffer, returns the
+ * data remaining in the protocol buffer.  This is a direct reference
+ * to the data in the protocol buffer.
+ *
+ * \param[in]		pbp	The protocol buffer position.
+ * \param[in]		pbuf	The protocol buffer.
+ *
+ * \return	The data remaining in the protocol buffer.
+ */
+#define pbp_data(pbp, pbuf)					\
+  ((const char *)((pbuf)->pb_contents +				\
+		  ((pbp)->pbp_pos + PROTOCOL_HEADER_SIZE)))
 
 /** \brief Determine if position is at end.
  *
@@ -216,13 +243,14 @@ struct _pbuf_pos_s {
  * Causes the specified data to be appended to the protocol buffer.
  *
  * \param[in,out]	pbuf	The protocol buffer.
- * \param[in]		data	The data to append.
+ * \param[in]		data	The data to append; use -1 to use
+ *				string length.
  * \param[in]		datalen	The amount of data to append.
  *
  * \return	A true value if successful, false otherwise.
  */
-int protocol_buf_append(protocol_buf_t *pbuf, unsigned char *data,
-			size_t datalen);
+int protocol_buf_append(protocol_buf_t *pbuf, const char *data,
+			ev_ssize_t datalen);
 
 /** \brief Extract data from a buffer.
  *

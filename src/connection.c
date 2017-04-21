@@ -341,7 +341,8 @@ connection_send_state(connection_t *conn)
   if (!protocol_buf_add_uint8(&pbuf, conn->con_state.cst_flags) ||
       !protocol_buf_add_uint8(&pbuf, conn->con_state.cst_status) ||
       !protocol_buf_add_uint16(&pbuf, conn->con_state.cst_reserved) ||
-      !protocol_buf_append(&pbuf, conn->con_runtime->rt_config->cf_uuid,
+      !protocol_buf_append(&pbuf,
+			   (const char *)conn->con_runtime->rt_config->cf_uuid,
 			   sizeof(uuid_t))) {
     log_emit(conn->con_runtime->rt_config, LOG_WARNING,
 	     "Out of memory constructing connection state packet for %s",
