@@ -20,6 +20,7 @@ import uuid
 import six
 
 from hum_proto import attrs
+from hum_proto import entrypoints
 from hum_proto import enum
 
 
@@ -179,49 +180,6 @@ def _recvall(sock, size):
     return data
 
 
-class MessageMeta(attrs.InvalidatingAttrMeta):
-    """
-    A metaclass for classes inheriting from ``Message``.  This
-    metaclass builds on ``attrs.InvalidatingAttrMeta`` to keep a
-    dictionary of subclasses that may then be resolved using the
-    ``resolve()`` class method.
-    """
-
-    _classes = {}
-
-    def __init__(cls, name, bases, namespace):
-        """
-        Initialize a newly constructed ``Message`` subclass.
-
-        :param str name: The name of the new class.
-        :param tuple bases: A tuple of the class's base classes.
-        :param dict namespace: The new class's namespace.
-        """
-
-        # First, initiate InvalidatingAttrMeta
-        super(MessageMeta, cls).__init__(name, bases, namespace)
-
-        # Now make sure the class is referenced in _classes
-        xlated = name.lower()
-        if xlated not in cls._classes:
-            cls._classes[xlated] = cls
-
-    @classmethod
-    def resolve(mcs, name):
-        """
-        Given the name of a message class, look up its implementation.
-        This routine is liberal in what it accepts, accepting any
-        string case.
-
-        :param str name: The name of the message class to look up.
-
-        :returns: The message class, or ``None`` if the specific
-                  message class does not exist.
-        """
-
-        return mcs._classes.get(name.lower())
-
-
 class CommandError(Exception):
     """
     Represents errors in commands.
@@ -230,14 +188,15 @@ class CommandError(Exception):
     pass
 
 
-@six.add_metaclass(MessageMeta)
+@six.add_metaclass(attrs.InvalidatingAttrMeta)
 class Message(object):
     """
     Represent a protocol message.
     """
 
-    # Registered and recognized protocols
-    _decoders = {}
+    # Recognized classes and protocol decoders
+    _classes = entrypoints.EntrypointDict('hum_proto.msg')
+    _decoders = entrypoints.EntrypointDict('hum_proto.proto')
 
     # Information related to the carrier protocol
     _carrier_default_version = 0
@@ -270,39 +229,6 @@ class Message(object):
     # is received.  The method will be passed the application loop
     # object.
     reaction = None
-
-    @classmethod
-    def register(cls, proto):
-        """
-        A decorator used to register a function to be used to decode a
-        given protocol.  The function must take a carrier protocol
-        version (``carrier_version``), carrier protocol flags
-        (``carrier_flags``), the protocol number (``protocol``), the
-        payload (``payload``), and the message bytes (``_bytes``) as
-        keyword arguments, and must return an instance of a subclass
-        of ``Message``.  (The recommended way of handling this is take
-        arbitrary keyword arguments and pass them on to the
-        ``Message`` constructor.)
-
-        :param int proto: The protocol implemented by the class.
-
-        :returns: A decorator that will register the decoder function.
-
-        :raises TypeError:
-            The protocol specified is invalid or already registered.
-        """
-
-        # Make sure protocol number makes sense
-        if proto < 0 or proto > 255 or proto in cls._decoders:
-            raise TypeError('Bad or duplicate protocol %d' % proto)
-
-        # Decorator to actually register the class
-        def decorator(decoder):
-            cls._decoders[proto] = decoder
-
-            return decoder
-
-        return decorator
 
     @classmethod
     def recv(cls, sock):
@@ -376,7 +302,7 @@ class Message(object):
             command = []
 
         # Look up the message type
-        type_ = cls.resolve(type_name)
+        type_ = cls._classes.get(type_name.lower())
         if type_ is None:
             raise CommandError('Unknown message type "%s"' % type_name)
 
@@ -810,7 +736,6 @@ class ConnectionError(Message):
         return args
 
 
-@Message.register(0)
 def _protocol0(**kwargs):
     """
     Decode protocol 0 messages.
@@ -862,7 +787,6 @@ class PingRequest(Message):
         apploop.send_msg(PingReply(payload=self.payload))
 
 
-@Message.register(1)
 def _protocol1(**kwargs):
     """
     Decode protocol 1 messages.
@@ -998,7 +922,6 @@ class StartTLSRequest(Message):
     PROTOCOL = 2
 
 
-@Message.register(2)
 def _protocol2(**kwargs):
     """
     Decode protocol 2 messages.
@@ -1313,7 +1236,6 @@ class SASLServerStep(SASLClientStep):
     default_carrier_flags = 'reply'
 
 
-@Message.register(3)
 def _protocol3(**kwargs):
     """
     Decode protocol 3 messages.

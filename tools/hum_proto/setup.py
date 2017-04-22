@@ -61,5 +61,34 @@ setuptools.setup(
         'console_scripts': [
             'hum_proto = hum_proto.main:main.console',
         ],
+        'hum_proto.proto': [
+            '0 = hum_proto.message:_protocol0',
+            '1 = hum_proto.message:_protocol1',
+            '2 = hum_proto.message:_protocol2',
+            '3 = hum_proto.message:_protocol3',
+        ],
+        'hum_proto.msg': [
+            # Protocol 0
+            'connectionstate = hum_proto.message:ConnectionState',
+            'requestconnectionstate = hum_proto.message:'
+            'RequestConnectionState',
+            'connectionerror = hum_proto.message:ConnectionError',
+
+            # Protocol 1
+            'pingreply = hum_proto.message:PingReply',
+            'pingrequest = hum_proto.message:PingRequest',
+
+            # Protocol 2
+            'starttlserror = hum_proto.message:StartTLSError',
+            'starttlsreply = hum_proto.message:StartTLSReply',
+            'starttlsrequest = hum_proto.message:StartTLSRequest',
+
+            # Protocol 3
+            'saslerror = hum_proto.message:SASLError',
+            'requestsaslmechanisms = hum_proto.message:RequestSASLMechanisms',
+            'saslmechanisms = hum_proto.message:SASLMechanisms',
+            'saslclientstep = hum_proto.message:SASLClientStep',
+            'saslserverstep = hum_proto.message:SASLServerStep',
+        ],
     },
 )

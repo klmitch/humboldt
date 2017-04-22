@@ -103,94 +103,9 @@ class TestRecvAll(object):
         assert result == b'1234567'
 
 
-class TestMessageMeta(object):
-    def test_init_base(self, mocker):
-        mocker.patch.dict(message.MessageMeta._classes, clear=True)
-        mock_init = mocker.patch.object(
-            message.attrs.InvalidatingAttrMeta, '__init__', return_value=None
-        )
-        namespace = {'some': 'namespace'}
-
-        result = message.MessageMeta('SomeName', (object,), namespace)
-
-        assert message.MessageMeta._classes == {
-            'somename': result,
-        }
-        mock_init.assert_called_once_with('SomeName', (object,), namespace)
-
-    def test_init_duplicate(self, mocker):
-        mocker.patch.dict(
-            message.MessageMeta._classes, clear=True, somename='other'
-        )
-        mock_init = mocker.patch.object(
-            message.attrs.InvalidatingAttrMeta, '__init__', return_value=None
-        )
-        namespace = {'some': 'namespace'}
-
-        message.MessageMeta('SomeName', (object,), namespace)
-
-        assert message.MessageMeta._classes == {
-            'somename': 'other',
-        }
-        mock_init.assert_called_once_with('SomeName', (object,), namespace)
-
-    def test_resolve_base(self, mocker):
-        mocker.patch.dict(
-            message.MessageMeta._classes, clear=True, somename='other'
-        )
-
-        result = message.MessageMeta.resolve('SomeName')
-
-        assert result == 'other'
-
-    def test_resolve_missing(self, mocker):
-        mocker.patch.dict(message.MessageMeta._classes, clear=True)
-
-        result = message.MessageMeta.resolve('SomeName')
-
-        assert result is None
-
-
 class TestMessage(object):
-    def test_register_base(self, mocker):
-        mocker.patch.dict(message.Message._decoders, clear=True)
-
-        decorator = message.Message.register(5)
-
-        assert callable(decorator)
-        assert message.Message._decoders == {}
-
-        func = mocker.Mock()
-
-        result = decorator(func)
-
-        assert result is func
-        assert message.Message._decoders == {5: func}
-
-    def test_register_low_proto(self, mocker):
-        mocker.patch.dict(message.Message._decoders, clear=True)
-
-        with pytest.raises(TypeError):
-            message.Message.register(-1)
-        assert message.Message._decoders == {}
-
-    def test_register_high_proto(self, mocker):
-        mocker.patch.dict(message.Message._decoders, clear=True)
-
-        with pytest.raises(TypeError):
-            message.Message.register(256)
-        assert message.Message._decoders == {}
-
-    def test_register_duplicate_proto(self, mocker):
-        mocker.patch.dict(message.Message._decoders, clear=True)
-        message.Message._decoders[5] = 'proto'
-
-        with pytest.raises(TypeError):
-            message.Message.register(5)
-        assert message.Message._decoders == {5: 'proto'}
-
     def test_recv_header_only(self, mocker):
-        mocker.patch.dict(message.Message._decoders, clear=True)
+        mocker.patch.object(message.Message, '_decoders', {})
         mock_recvall = mocker.patch.object(
             message, '_recvall', return_value=b'\0\0\0\4'
         )
@@ -216,7 +131,7 @@ class TestMessage(object):
         assert int(flags) == 0
 
     def test_recv_vers_flags(self, mocker):
-        mocker.patch.dict(message.Message._decoders, clear=True)
+        mocker.patch.object(message.Message, '_decoders', {})
         mock_recvall = mocker.patch.object(
             message, '_recvall', return_value=b'\70\3\0\4'
         )
@@ -242,7 +157,7 @@ class TestMessage(object):
         assert int(flags) == 0x8
 
     def test_recv_with_payload(self, mocker):
-        mocker.patch.dict(message.Message._decoders, clear=True)
+        mocker.patch.object(message.Message, '_decoders', {})
         mock_recvall = mocker.patch.object(
             message, '_recvall', side_effect=[
                 b'\0\0\0\22',
@@ -270,7 +185,7 @@ class TestMessage(object):
         )
 
     def test_recv_header_only_short(self, mocker):
-        mocker.patch.dict(message.Message._decoders, clear=True)
+        mocker.patch.object(message.Message, '_decoders', {})
         mock_recvall = mocker.patch.object(
             message, '_recvall', return_value=b'\0\0\0'
         )
@@ -287,7 +202,7 @@ class TestMessage(object):
         assert not mock_init.called
 
     def test_recv_header_only_closed(self, mocker):
-        mocker.patch.dict(message.Message._decoders, clear=True)
+        mocker.patch.object(message.Message, '_decoders', {})
         mock_recvall = mocker.patch.object(
             message, '_recvall', return_value=None
         )
@@ -304,7 +219,7 @@ class TestMessage(object):
         assert not mock_init.called
 
     def test_recv_with_payload_short(self, mocker):
-        mocker.patch.dict(message.Message._decoders, clear=True)
+        mocker.patch.object(message.Message, '_decoders', {})
         mock_recvall = mocker.patch.object(
             message, '_recvall', side_effect=[
                 b'\0\0\0\22',
@@ -326,7 +241,7 @@ class TestMessage(object):
         assert not mock_init.called
 
     def test_recv_with_payload_closed(self, mocker):
-        mocker.patch.dict(message.Message._decoders, clear=True)
+        mocker.patch.object(message.Message, '_decoders', {})
         mock_recvall = mocker.patch.object(
             message, '_recvall', side_effect=[
                 b'\0\0\0\22',
@@ -348,7 +263,7 @@ class TestMessage(object):
         assert not mock_init.called
 
     def test_recv_header_only_registered(self, mocker):
-        mocker.patch.dict(message.Message._decoders, clear=True)
+        mocker.patch.object(message.Message, '_decoders', {})
         proto = mocker.Mock()
         message.Message._decoders[0] = proto
         mock_recvall = mocker.patch.object(
@@ -374,7 +289,7 @@ class TestMessage(object):
         )
 
     def test_recv_with_payload_registered(self, mocker):
-        mocker.patch.dict(message.Message._decoders, clear=True)
+        mocker.patch.object(message.Message, '_decoders', {})
         proto = mocker.Mock()
         message.Message._decoders[0] = proto
         mock_recvall = mocker.patch.object(
@@ -416,14 +331,11 @@ class TestMessage(object):
                 'd': mocker.Mock(),
             },
         )
-        mock_resolve = mocker.patch.object(
-            message.Message, 'resolve', return_value=type_
-        )
+        mocker.patch.object(message.Message, '_classes', {'msgtest': type_})
 
         result = message.Message.interpret(['msg', 'test', 'a=1', 'c=3'])
 
         assert result == type_.return_value
-        mock_resolve.assert_called_once_with('msgtest')
         type_._carrier_attrs['a'].assert_called_once_with('1')
         assert not type_._carrier_attrs['b'].called
         type_.MSG_ATTRS['c'].assert_called_once_with('3')
@@ -445,14 +357,11 @@ class TestMessage(object):
                 'd': mocker.Mock(),
             },
         )
-        mock_resolve = mocker.patch.object(
-            message.Message, 'resolve', return_value=type_
-        )
+        mocker.patch.object(message.Message, '_classes', {'msgtest': type_})
 
         result = message.Message.interpret(['msg', 'test'])
 
         assert result == type_.return_value
-        mock_resolve.assert_called_once_with('msgtest')
         assert not type_._carrier_attrs['a'].called
         assert not type_._carrier_attrs['b'].called
         assert not type_.MSG_ATTRS['c'].called
@@ -460,13 +369,10 @@ class TestMessage(object):
         type_.assert_called_once_with()
 
     def test_interpret_no_message(self, mocker):
-        mock_resolve = mocker.patch.object(
-            message.Message, 'resolve', return_value=None
-        )
+        mocker.patch.object(message.Message, '_classes', {})
 
         with pytest.raises(message.CommandError):
             message.Message.interpret(['msg', 'test'])
-        mock_resolve.assert_called_once_with('msgtest')
 
     def test_interpret_missing_parameter_value(self, mocker):
         type_ = mocker.Mock(
@@ -480,13 +386,10 @@ class TestMessage(object):
                 'd': mocker.Mock(),
             },
         )
-        mock_resolve = mocker.patch.object(
-            message.Message, 'resolve', return_value=type_
-        )
+        mocker.patch.object(message.Message, '_classes', {'msgtest': type_})
 
         with pytest.raises(message.CommandError):
             message.Message.interpret(['msg', 'test', 'a=1', 'b', 'c=3'])
-        mock_resolve.assert_called_once_with('msgtest')
         type_._carrier_attrs['a'].assert_called_once_with('1')
         assert not type_._carrier_attrs['b'].called
         assert not type_.MSG_ATTRS['c'].called
@@ -505,13 +408,10 @@ class TestMessage(object):
                 'd': mocker.Mock(),
             },
         )
-        mock_resolve = mocker.patch.object(
-            message.Message, 'resolve', return_value=type_
-        )
+        mocker.patch.object(message.Message, '_classes', {'msgtest': type_})
 
         with pytest.raises(message.CommandError):
             message.Message.interpret(['msg', 'test', 'a=1', 'e=5'])
-        mock_resolve.assert_called_once_with('msgtest')
         type_._carrier_attrs['a'].assert_called_once_with('1')
         assert not type_._carrier_attrs['b'].called
         assert not type_.MSG_ATTRS['c'].called
@@ -530,13 +430,10 @@ class TestMessage(object):
                 'd': mocker.Mock(),
             },
         )
-        mock_resolve = mocker.patch.object(
-            message.Message, 'resolve', return_value=type_
-        )
+        mocker.patch.object(message.Message, '_classes', {'msgtest': type_})
 
         with pytest.raises(message.CommandError):
             message.Message.interpret(['msg', 'test', 'a=1', 'c=3'])
-        mock_resolve.assert_called_once_with('msgtest')
         type_._carrier_attrs['a'].assert_called_once_with('1')
         assert not type_._carrier_attrs['b'].called
         type_.MSG_ATTRS['c'].assert_called_once_with('3')
@@ -556,13 +453,10 @@ class TestMessage(object):
             },
             side_effect=ValueError('oops'),
         )
-        mock_resolve = mocker.patch.object(
-            message.Message, 'resolve', return_value=type_
-        )
+        mocker.patch.object(message.Message, '_classes', {'msgtest': type_})
 
         with pytest.raises(message.CommandError):
             message.Message.interpret(['msg', 'test', 'a=1', 'c=3'])
-        mock_resolve.assert_called_once_with('msgtest')
         type_._carrier_attrs['a'].assert_called_once_with('1')
         assert not type_._carrier_attrs['b'].called
         type_.MSG_ATTRS['c'].assert_called_once_with('3')
