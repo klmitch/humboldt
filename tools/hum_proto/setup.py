@@ -62,33 +62,34 @@ setuptools.setup(
             'hum_proto = hum_proto.main:main.console',
         ],
         'hum_proto.proto': [
-            '0 = hum_proto.message:_protocol0',
-            '1 = hum_proto.message:_protocol1',
-            '2 = hum_proto.message:_protocol2',
-            '3 = hum_proto.message:_protocol3',
+            '0 = hum_proto.protocols.connection:_protocol0',
+            '1 = hum_proto.protocols.ping:_protocol1',
+            '2 = hum_proto.protocols.tls:_protocol2',
+            '3 = hum_proto.protocols.sasl:_protocol3',
         ],
         'hum_proto.msg': [
             # Protocol 0
-            'connectionstate = hum_proto.message:ConnectionState',
-            'requestconnectionstate = hum_proto.message:'
+            'connectionstate = hum_proto.protocols.connection:ConnectionState',
+            'requestconnectionstate = hum_proto.protocols.connection:'
             'RequestConnectionState',
-            'connectionerror = hum_proto.message:ConnectionError',
+            'connectionerror = hum_proto.protocols.connection:ConnectionError',
 
             # Protocol 1
-            'pingreply = hum_proto.message:PingReply',
-            'pingrequest = hum_proto.message:PingRequest',
+            'pingreply = hum_proto.protocols.ping:PingReply',
+            'pingrequest = hum_proto.protocols.ping:PingRequest',
 
             # Protocol 2
-            'starttlserror = hum_proto.message:StartTLSError',
-            'starttlsreply = hum_proto.message:StartTLSReply',
-            'starttlsrequest = hum_proto.message:StartTLSRequest',
+            'starttlserror = hum_proto.protocols.tls:StartTLSError',
+            'starttlsreply = hum_proto.protocols.tls:StartTLSReply',
+            'starttlsrequest = hum_proto.protocols.tls:StartTLSRequest',
 
             # Protocol 3
-            'saslerror = hum_proto.message:SASLError',
-            'requestsaslmechanisms = hum_proto.message:RequestSASLMechanisms',
-            'saslmechanisms = hum_proto.message:SASLMechanisms',
-            'saslclientstep = hum_proto.message:SASLClientStep',
-            'saslserverstep = hum_proto.message:SASLServerStep',
+            'saslerror = hum_proto.protocols.sasl:SASLError',
+            'requestsaslmechanisms = hum_proto.protocols.sasl:'
+            'RequestSASLMechanisms',
+            'saslmechanisms = hum_proto.protocols.sasl:SASLMechanisms',
+            'saslclientstep = hum_proto.protocols.sasl:SASLClientStep',
+            'saslserverstep = hum_proto.protocols.sasl:SASLServerStep',
         ],
     },
 )
