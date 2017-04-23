@@ -1,0 +1,26 @@
+sudo: false
+addons:
+  apt:
+    packages:
+    - pkg-config
+    - libyaml-dev
+    - uuid-dev
+    - libevent-dev
+    - libevent-openssl
+    - libssl-dev
+    - libsasl2-dev
+language: python
+matrix:
+  include:
+  - python: "2.7"
+    env: HUMBOLDT_TESTENV=tox TOXENV=pep8
+  - python: "2.7"
+    env: HUMBOLDT_TESTENV=tox TOXENV=py27
+  - python: "3.4"
+    env: HUMBOLDT_TESTENV=tox TOXENV=py34
+  - python: "3.5"
+    env: HUMBOLDT_TESTENV=tox TOXENV=py35
+  - python: "3.6"
+    env: HUMBOLDT_TESTENV=tox TOXENV=py36
+  - env: HUMBOLDT_TESTENV=make
+script: ./tools/travis-test.sh
