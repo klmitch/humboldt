@@ -16,8 +16,21 @@ build_root=`pwd`
 
 # Run distcheck
 if [ -z "${HUMBOLDT_TESTENV}" -o "${HUMBOLDT_TESTENV}" = make ]; then
+    # Begin by generating the autoconf files
+    ./autogen.sh
+
+    # Create a build directory and cd there
+    mkdir build
+    cd build
+
+    # Configure the repository
+    ${build_root}/configure
+
     # Run a simple make distcheck
     make distcheck
+
+    # Done; go back to the build root
+    cd ${build_root}
 fi
 
 # Run tox on our tools
