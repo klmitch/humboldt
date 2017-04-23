@@ -16,10 +16,10 @@ import collections
 import itertools
 import struct
 
+import entrypointer
 import six
 
 from hum_proto import attrs
-from hum_proto import entrypoints
 from hum_proto import enum
 
 
@@ -194,8 +194,8 @@ class Message(object):
     """
 
     # Recognized classes and protocol decoders
-    _classes = entrypoints.EntrypointDict('hum_proto.msg')
-    _decoders = entrypoints.EntrypointDict('hum_proto.proto')
+    _classes = entrypointer.eps.hum_proto.msg
+    _decoders = entrypointer.eps.hum_proto.proto
 
     # Information related to the carrier protocol
     _carrier_default_version = 0
@@ -269,8 +269,8 @@ class Message(object):
         }
 
         # Make the message object
-        obj = (cls._decoders[protocol]
-               if protocol in cls._decoders else cls)(**params)
+        obj = (cls._decoders[str(protocol)]
+               if str(protocol) in cls._decoders else cls)(**params)
 
         return obj
 

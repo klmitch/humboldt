@@ -1,4 +1,5 @@
 cli_tools
+entrypointer
 prompt_toolkit
 setuptools
 six
