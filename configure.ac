@@ -14,7 +14,7 @@ dnl permissions and limitations under the License.
 
 AC_INIT([Humboldt Overlay Network Daemon], 0.0.1, [klmitch@mit.edu],
 	[humboldt])
-AC_PREREQ(2.69)
+AC_PREREQ(2.64)
 
 AC_COPYRIGHT([Copyright (C) 2017 by Kevin L. Mitchell <klmitch@mit.edu>
 
