@@ -6,7 +6,6 @@ addons:
     - libyaml-dev
     - uuid-dev
     - libevent-dev
-    - libevent-openssl
     - libssl-dev
     - libsasl2-dev
 language: python
