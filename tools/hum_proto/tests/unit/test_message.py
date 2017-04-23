@@ -261,9 +261,10 @@ class TestMessage(object):
         assert not mock_init.called
 
     def test_recv_header_only_registered(self, mocker):
-        mocker.patch.object(message.Message, '_decoders', {})
         proto = mocker.Mock()
-        message.Message._decoders[0] = proto
+        mocker.patch.object(message.Message, '_decoders', {
+            '0': proto,
+        })
         mock_recvall = mocker.patch.object(
             message, '_recvall', return_value=b'\0\0\0\4'
         )
@@ -287,9 +288,10 @@ class TestMessage(object):
         )
 
     def test_recv_with_payload_registered(self, mocker):
-        mocker.patch.object(message.Message, '_decoders', {})
         proto = mocker.Mock()
-        message.Message._decoders[0] = proto
+        mocker.patch.object(message.Message, '_decoders', {
+            '0': proto,
+        })
         mock_recvall = mocker.patch.object(
             message, '_recvall', side_effect=[
                 b'\0\0\0\22',
