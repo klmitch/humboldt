@@ -52,7 +52,7 @@ AX_LIB_SOCKET_NSL
 HUMBOLDT_PC_LIBRARY([YAML], [yaml-0.1])
 HUMBOLDT_PC_LIBRARY([UUID], [uuid])
 HUMBOLDT_PC_LIBRARY([LIBEVENT], [libevent])
-HUMBOLDT_PC_LIBRARY([SASL], [libsasl2])
+HUMBOLDT_PC_LIBRARY([SASL], [libsasl2], [sasl2], [sasl_client_init])
 
 dnl Conditional libraries
 OPENSSL_CFLAGS=

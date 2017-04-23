@@ -17,8 +17,16 @@
 # HUMBOLDT_PC_LIBRARY(VARIABLE-PREFIX, MODULES)
 AC_DEFUN([HUMBOLDT_PC_LIBRARY],
 [PKG_CHECK_MODULES([$1], [$2], [], [
-  AC_ERROR([$2 not found])
-])
+  m4_ifnblank([$3],
+    [m4_ifblank([$4],
+      [mp_fatal([PKG_CHECK_MODULES requires exactly 2 or 4 arguments])],
+      [AC_CHECK_LIB([$3], [$4], [
+        $1[]_CFLAGS=
+        $1[]_LIBS=-l$3
+      ], [AC_ERROR([$2 not found])])]
+    )],
+    [AC_ERROR([$2 not found])]
+  )])
 CPPFLAGS="${$1[]_CFLAGS} ${CPPFLAGS}"
 LIBS="${$1[]_LIBS} ${LIBS}"
 ])# HUMBOLDT_PC_LIBRARY

@@ -20,7 +20,9 @@ if [ -z "${HUMBOLDT_TESTENV}" -o "${HUMBOLDT_TESTENV}" = make ]; then
     ./autogen.sh
 
     # Create a build directory and cd there
-    mkdir build
+    if [ ! -d build ]; then
+	mkdir build
+    fi
     cd build
 
     # Configure the repository
