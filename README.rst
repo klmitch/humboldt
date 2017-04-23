@@ -2,6 +2,9 @@
 Humboldt Overlay Network Daemon
 ===============================
 
+.. image:: https://travis-ci.org/klmitch/humboldt.svg?branch=master
+    :target: https://travis-ci.org/klmitch/humboldt
+
 Humboldt is a server that, in conjunction with other instances of
 Humboldt, creates and maintains a secure and scalable overlay
 network.  The Humboldt server itself is responsible for maintaining
