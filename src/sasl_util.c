@@ -228,10 +228,11 @@ getopt_callback(sasl_conf_t *sasl_conf, const char *plugin_name,
     callbacks[cb_idx].context = 0;		\
   } while (0)
 
+sasl_callback_t callbacks[MAX_SASL_CALLBACKS + 1];
+
 int
 initialize_sasl(config_t *conf)
 {
-  sasl_callback_t callbacks[MAX_SASL_CALLBACKS + 1];
   int cb_idx = 0, result;
 
   /* Set up the logging callback */
