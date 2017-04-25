@@ -272,6 +272,15 @@ int connection_set_username(connection_t *conn, const char *username,
  */
 #define CONN_USERNAME_COPY	0x40000000
 
+/** \brief The username is from SASL.
+ *
+ * If passed to connection_set_username(), this flag indicates that
+ * the username is from the SASL library.  This is used by SASL to
+ * inform connection_set_username() that it is not necessary to notify
+ * SASL of the username.
+ */
+#define CONN_USERNAME_FROMSASL	0x20000000
+
 /** \brief Send connection state.
  *
  * Send the connection state to the connection.

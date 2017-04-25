@@ -481,8 +481,8 @@ sasl_process(protocol_buf_t *msg, connection_t *conn)
   char mechname[SASL_MECHNAMEMAX + 1] = "";
   uint8_t mechname_len = 0;
   pbuf_pos_t pos = PBUF_POS_INIT();
-  const char *out_data;
-  unsigned int out_len;
+  const char *out_data, *username;
+  unsigned int out_len, ssf;
   int result;
 
   common_verify(msg, PROTOCOL_BUF_MAGIC);
@@ -566,7 +566,40 @@ sasl_process(protocol_buf_t *msg, connection_t *conn)
   switch (result) {
   case SASL_OK:
     /* Authentication complete! */
-    conn->con_flags &= CONN_FLAG_SASL_INPROGRESS;
+    conn->con_flags &= ~CONN_FLAG_SASL_INPROGRESS;
+
+    /* Get the authenticated user name */
+    if (sasl_getprop(conn->con_sasl->sac_server, SASL_USERNAME,
+		     (const void **)&username) != SASL_OK) {
+      log_emit(conn->con_runtime->rt_config, LOG_NOTICE,
+	       "Unable to get authenticated username from SASL for %s: %s",
+	       connection_describe(conn, conn_desc, sizeof(conn_desc)),
+	       sasl_errdetail(conn->con_sasl->sac_server));
+      return PBR_CONNECTION_CLOSE;
+    }
+
+    /* Check if it's different and save it */
+    if (strcmp(conn->con_username, username))
+      connection_set_username(conn, username, CONN_USERNAME_FROMSASL);
+
+    /* Get the security strength factor */
+    if (sasl_getprop(conn->con_sasl->sac_server, SASL_SSF,
+		     (const void **)&ssf) != SASL_OK) {
+      log_emit(conn->con_runtime->rt_config, LOG_NOTICE,
+	       "Unable to get security strength factor from SASL for %s: %s",
+	       connection_describe(conn, conn_desc, sizeof(conn_desc)),
+	       sasl_errdetail(conn->con_sasl->sac_server));
+      return PBR_CONNECTION_CLOSE;
+    }
+
+    /* Check if we need to install a security layer */
+    if (ssf > 0) {
+      log_emit(conn->con_runtime->rt_config, LOG_WARNING,
+	       "Connection %s negotiated a security layer, but security "
+	       "layers are not yet supported; ignoring...",
+	       connection_describe(conn, conn_desc, sizeof(conn_desc)));
+    }
+
     log_emit(conn->con_runtime->rt_config, LOG_DEBUG,
 	     "Completed SASL exchange with %s",
 	     connection_describe(conn, conn_desc, sizeof(conn_desc)));

@@ -287,7 +287,7 @@ connection_set_username(connection_t *conn, const char *username,
       return 0;
 
     /* Set it on the SASL connection before we free the old one */
-    if (!sasl_set_external(conn, tmp)) {
+    if (!(flags & CONN_USERNAME_FROMSASL) && !sasl_set_external(conn, tmp)) {
       free((void *)tmp);
       return 0;
     }
@@ -303,7 +303,8 @@ connection_set_username(connection_t *conn, const char *username,
     conn->con_flags |= CONN_FLAG_FREE_USERNAME;
   } else {
     /* Set it on the SASL connection before we free the old one */
-    if (!sasl_set_external(conn, username))
+    if (!(flags & CONN_USERNAME_FROMSASL) &&
+	!sasl_set_external(conn, username))
       return 0;
 
     /* Free the old username if needed */
