@@ -13,6 +13,7 @@
 /Makefile.in
 /missing
 /stamp-h1
+/*build
 .deps
 .dirstamp
 *.o

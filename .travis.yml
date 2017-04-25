@@ -21,5 +21,6 @@ matrix:
     env: HUMBOLDT_TESTENV=tox TOXENV=py35
   - python: "3.6"
     env: HUMBOLDT_TESTENV=tox TOXENV=py36
-  - env: HUMBOLDT_TESTENV=make
+  - env: HUMBOLDT_TESTENV=make DISTCHECK_CONFIGURE_FLAGS=
+  - env: HUMBOLDT_TESTENV=make DISTCHECK_CONFIGURE_FLAGS=--without-openssl
 script: ./tools/travis-test.sh
