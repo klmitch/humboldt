@@ -325,8 +325,7 @@ sasl_connection_init(connection_t *conn)
 
   /* Initialize the server side of SASL */
   if ((result = sasl_server_new(HUMBOLDT_SVCNAME, 0, 0, srvaddr, cliaddr,
-				0, SASL_SUCCESS_DATA,
-				&sasl_conn->sac_server)) != SASL_OK) {
+				0, 0, &sasl_conn->sac_server)) != SASL_OK) {
     log_emit(conn->con_runtime->rt_config, LOG_NOTICE,
 	     "Failed to initialize SASL connection (server side) for %s: %s",
 	     connection_describe(conn, conn_desc, sizeof(conn_desc)),
@@ -338,8 +337,7 @@ sasl_connection_init(connection_t *conn)
   /* Initialize the client side of SASL, if needed */
   if (conn->con_type == ENDPOINT_PEER) {
     if ((result = sasl_client_new(HUMBOLDT_SVCNAME, 0, srvaddr, cliaddr,
-				  0, SASL_SUCCESS_DATA,
-				  &sasl_conn->sac_client)) != SASL_OK) {
+				  0, 0, &sasl_conn->sac_client)) != SASL_OK) {
       log_emit(conn->con_runtime->rt_config, LOG_NOTICE,
 	       "Failed to initialize SASL connection (client side) for %s: %s",
 	       connection_describe(conn, conn_desc, sizeof(conn_desc)),
