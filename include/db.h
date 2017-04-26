@@ -402,6 +402,18 @@ struct _hash_ent_s {
     _he->he_magic = HASH_ENT_MAGIC;		\
   } while (0)
 
+/** \brief Set a hash table entry key.
+ *
+ * Some hash table entries are allocated before the key on the entry
+ * can be set.  This macro allows the key of a dynamically allocated
+ * hash table entry to be set after the entry has been initialized.
+ *
+ * \param[in,out]	ent	A pointer to the hash table entry.
+ * \param[in]		key	The object acting as a key for the
+ *				entry.
+ */
+#define hash_ent_setkey(ent, key)	((ent)->he_key = (key))
+
 /** \brief Determine if an entry is linked.
  *
  * Tests to see whether a hash table entry is linked to a hash table.

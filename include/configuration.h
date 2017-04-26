@@ -54,6 +54,7 @@ typedef enum _conf_ctx_flavor_e {
 #include "interfaces.h"	/* for interfaces_t */
 #include "sasl_util.h"	/* for sasl_conf_t; depends on config_t */
 #include "ssl.h"	/* for ssl_conf_t; depends on config_t */
+#include "user.h"	/* for userdb_t; depends on config_t */
 #include "yaml_util.h"	/* for yaml_ctx_t, yaml_mark_t */
 
 /** \brief Configuration context structure.
@@ -129,6 +130,7 @@ struct _config_s {
   hash_tab_t	cf_networks;	/**< Networks hash table */
   sasl_conf_t  *cf_sasl;	/**< SASL configuration */
   ssl_conf_t   *cf_ssl;		/**< SSL configuration */
+  userdb_t     *cf_userdb;	/**< User database */
   unsigned int	cf_min_ssf;	/**< Minimum security strength factor */
   interfaces_t *cf_interfaces;	/**< Cached interface information */
 };

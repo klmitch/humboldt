@@ -45,6 +45,7 @@ humboldt_SOURCES = \
 	include/runtime.h \
 	include/sasl_util.h \
 	include/ssl.h \
+	include/user.h \
 	include/yaml_util.h \
 	src/alloc.c \
 	src/configuration.c \
@@ -58,4 +59,5 @@ humboldt_SOURCES = \
 	src/runtime.c \
 	src/sasl_util.c \
 	src/ssl.c \
+	src/user.c \
 	src/yaml_util.c

@@ -33,6 +33,7 @@
 #include "include/log.h"
 #include "include/sasl_util.h"
 #include "include/ssl.h"
+#include "include/user.h"
 #include "include/yaml_util.h"
 
 /* Recognized short options */
@@ -746,6 +747,7 @@ static mapkeys_t top_level[] = {
   MAPKEY("sasl", sasl_conf_processor),
   MAPKEY("ssl", ssl_conf_processor),
   MAPKEY("statedir", proc_statedir),
+  MAPKEY("users", user_conf_processor),
   MAPKEY("uuid", proc_uuid)
 };
 

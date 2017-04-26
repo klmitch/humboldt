@@ -87,6 +87,20 @@ emit_sasl_option(sasl_option_t *option, config_t *conf)
 	   option->sao_option, option->sao_value, option->sao_vallen);
 }
 
+static void
+emit_user(user_t *user, config_t *conf)
+{
+  log_emit(conf, LOG_DEBUG, "  User %s (%s)%s [%s%s%s%s ]",
+	   user->u_name,
+	   (user->u_type == USER_TYPE_BYNAME ? "by name" :
+	    (user->u_type == USER_TYPE_BYREGEX ? "by regex" : "unknown")),
+	   user->u_passwd ? " with password" : "",
+	   user->u_flags & USER_INVALID ? " invalid" : "",
+	   user->u_flags & USER_AUTHZ_PEER ? " authz_peer" : "",
+	   user->u_flags & USER_AUTHZ_CLIENT ? " authz_client" : "",
+	   user->u_flags & USER_AUTHZ_ADMIN ? " authz_admin" : "");
+}
+
 int
 main(int argc, char **argv)
 {
@@ -148,6 +162,20 @@ main(int argc, char **argv)
     if (conf.cf_ssl->sc_private_key)
       log_emit(&conf, LOG_DEBUG, "  Private key file: %s",
 	       conf.cf_ssl->sc_private_key);
+  }
+
+  if (!conf.cf_userdb)
+    log_emit(&conf, LOG_DEBUG, "No user database");
+  else {
+    log_emit(&conf, LOG_DEBUG, "User database with %d entries "
+	     "(%d plain, %d regex)%s", conf.cf_userdb->udb_users.ht_count +
+	     conf.cf_userdb->udb_regex.lh_count,
+	     conf.cf_userdb->udb_users.ht_count,
+	     conf.cf_userdb->udb_regex.lh_count,
+	     conf.cf_userdb->udb_flags & USERDB_FLAG_PASSWORDS ?
+	     " with passwords" : "");
+    hash_iter(&conf.cf_userdb->udb_users, (db_iter_t)emit_user, &conf);
+    link_iter(&conf.cf_userdb->udb_regex, (db_iter_t)emit_user, &conf);
   }
 
   /* Initialize the runtime */
