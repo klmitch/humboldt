@@ -136,7 +136,7 @@ struct _config_s {
 /** \brief Configuration magic number.
  *
  * This is the magic number used for the configuration structure.  It
- * is used to guard against programming problems, such passing an
+ * is used to guard against programming problems, such as passing an
  * incorrect configuration.
  */
 #define CONFIG_MAGIC 0xa059d600
