@@ -368,7 +368,7 @@ struct _hash_ent_s {
   magic_t	he_magic;	/**< Magic number */
   link_elem_t	he_elem;	/**< Linked list element */
   void	       *he_obj;		/**< Object associated with this entry */
-  void	       *he_key;		/**< Object key for this entry */
+  const void   *he_key;		/**< Object key for this entry */
   hash_t	he_hash;	/**< Entry absolute hash */
   hash_tab_t   *he_table;	/**< Hash table entry is in */
 };
