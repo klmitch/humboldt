@@ -348,7 +348,7 @@ connection_send_state(connection_t *conn)
   protocol_buf_t pbuf = PROTOCOL_BUF_INIT(PROTOCOL_REPLY, PROTOCOL_CONNSTATE);
 
   /* Do nothing if we're in connecting mode */
-  if (connection->con_mode == CONN_MODE_CONNECTING)
+  if (conn->con_mode == CONN_MODE_CONNECTING)
     return 1;
 
   /* Give a hint as to the packet size */
