@@ -53,7 +53,8 @@ typedef enum _conn_status_e {
 typedef enum _conn_error_e {
   CONN_ERR_NO_ERROR,		/**< No error has occurred */
   CONN_ERR_UNKNOWN_PROTOCOL,	/**< Protocol is unknown */
-  CONN_ERR_MALFORMED_MSG	/**< Message is malformed */
+  CONN_ERR_MALFORMED_MSG,	/**< Message is malformed */
+  CONN_ERR_UNAUTHORIZED		/**< Action is not authorized */
 } conn_error_t;
 
 #include "common.h"		/* for magic_t */
@@ -62,6 +63,7 @@ typedef enum _conn_error_e {
 #include "protocol.h"		/* for protocol_buf_t */
 #include "sasl_util.h"		/* for sasl_connection_t */
 #include "ssl.h"		/* for ssl_conn_t */
+#include "user.h"		/* for user_t */
 
 /** \brief Connection state structure.
  *
@@ -123,6 +125,7 @@ struct _connection_s {
   conn_state_t	con_state;	/**< Connection state */
   uint32_t	con_flags;	/**< Miscellaneous non-state flags */
   const char   *con_username;	/**< Authenticated user */
+  const user_t *con_user;	/**< Attached user DB record */
   struct bufferevent
 	       *con_bev;	/**< Libevent bufferevent for connection */
   struct bufferevent

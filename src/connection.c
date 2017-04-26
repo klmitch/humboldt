@@ -150,6 +150,8 @@ connection_create(runtime_t *runtime, endpoint_t *endpoint,
   connection->con_type = endpoint->ep_config->epc_type;
   connection->con_flags = 0;
   connection->con_username = endpoint->ep_config->epc_username;
+  connection->con_user = user_lookup(runtime->rt_config->cf_userdb,
+				     connection->con_username);
   connection->con_bev = 0;
   connection->con_root = 0;
   connection->con_ssl = 0;
@@ -321,6 +323,10 @@ connection_set_username(connection_t *conn, const char *username,
       conn->con_flags |= CONN_FLAG_FREE_USERNAME;
   }
 
+  /* Attach the userdb record, if any */
+  conn->con_user = user_lookup(conn->con_runtime->rt_config->cf_userdb,
+			       conn->con_username);
+
   return 1;
 }
 
@@ -378,8 +384,21 @@ connection_set_state(connection_t *conn, uint8_t cst_flags,
     conn->con_state.cst_flags |= cst_flags;
 
   /* How about the status? */
-  if (flags & CONN_STATE_STATUS)
+  if (flags & CONN_STATE_STATUS) {
+    /* Make sure the status change is authorized */
+    if (cst_status != CONN_STAT_ERROR &&
+	conn->con_runtime->rt_config->cf_userdb &&
+	(!conn->con_user ||
+	 (cst_status == CONN_STAT_CLIENT &&
+	  !(conn->con_user->u_flags & USER_AUTHZ_CLIENT)) ||
+	 (cst_status == CONN_STAT_AUTH &&
+	  !(conn->con_user->u_flags & USER_AUTHZ_PEER)))) {
+      connection_report_error(conn, CONN_ERR_UNAUTHORIZED);
+      return 0;
+    }
+
     conn->con_state.cst_status = cst_status;
+  }
 
   /* If there were changes, send a state update */
   if (prev.cst_flags != conn->con_state.cst_flags ||
@@ -428,6 +447,10 @@ connection_report_error(connection_t *conn, conn_error_t error, ...)
 
       snprintf(errmsg, sizeof(errmsg), "Malformed protocol %d message", proto);
     }
+    break;
+
+  case CONN_ERR_UNAUTHORIZED:
+    snprintf(errmsg, sizeof(errmsg), "Not authorized");
     break;
   }
 
@@ -505,6 +528,7 @@ connection_destroy(connection_t *conn, int immediate)
   if (conn->con_username && (conn->con_flags & CONN_FLAG_FREE_USERNAME))
     free((void *)conn->con_username);
   conn->con_username = 0;
+  conn->con_user = 0;
 
   /* Release the SASL context */
   sasl_connection_release(conn->con_sasl);

@@ -160,6 +160,7 @@ class ConnectionError(message.Message):
             collections.namedtuple('MalformedMessage', ['protocol']),
             struct.Struct('>B'),
         ),
+        3: None,
     }
 
     MSG_ATTRS = collections.OrderedDict([
@@ -174,6 +175,7 @@ class ConnectionError(message.Message):
         enum.Enum('no error', 0),
         enum.Enum('unknown protocol', 1),
         enum.Enum('malformed message', 2),
+        enum.Enum('not authorized', 3),
     ).attr
 
     @classmethod
