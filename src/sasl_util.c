@@ -28,11 +28,12 @@
 #include "include/connection.h"
 #include "include/log.h"
 #include "include/sasl_util.h"
+#include "include/user.h"
 #include "include/yaml_util.h"
 
 #define HUMBOLDT_APPNAME	"Humboldt"
 #define HUMBOLDT_SVCNAME	"humboldt"
-#define MAX_SASL_CALLBACKS	2
+#define MAX_SASL_CALLBACKS	3
 
 static freelist_t connections = FREELIST_INIT(sasl_connection_t, 0);
 
@@ -213,6 +214,37 @@ getopt_callback(sasl_conf_t *sasl_conf, const char *plugin_name,
   return SASL_OK;
 }
 
+static int
+checkpass_callback(sasl_conn_t *conn, userdb_t *userdb,
+		   const char *username, const char *passwd,
+		   unsigned int passlen, struct propctx *propctx)
+{
+  int i = 0, j = 0;
+  uint8_t result = 0;
+  user_t *user;
+
+  /* First, look up the user record */
+  if (!(user = user_lookup(userdb, username)))
+    return SASL_NOUSER; /* other mechs will be queried */
+
+  /* Now, check to see if it has a password */
+  if (!user->u_passwd)
+    return SASL_DISABLED; /* other mechs will be queried */
+
+  /* OK, compare the passwords; avoid giving away information with timing */
+  while (j < passlen) {
+    result |= (uint8_t)user->u_passwd[i] ^ (uint8_t)passwd[j];
+
+    /* Increment the indexes as appropriate */
+    if (user->u_passwd[i])
+      i++;
+    j++;
+  }
+
+  /* Return the state of the comparison */
+  return result ? SASL_BADAUTH : SASL_OK;
+}
+
 #define set_callback(cb_id, cb_proc, cb_context)	\
   do {							\
     callbacks[cb_idx].id = (cb_id);			\
@@ -241,6 +273,11 @@ initialize_sasl(config_t *conf)
   /* If we have SASL options in the config, set up the getopt callback */
   if (conf->cf_sasl)
     set_callback(SASL_CB_GETOPT, getopt_callback, conf->cf_sasl);
+
+  /* If we have passwords in the config, set up the checkpass callback */
+  if (conf->cf_userdb && (conf->cf_userdb->udb_flags & USERDB_FLAG_PASSWORDS))
+    set_callback(SASL_CB_SERVER_USERDB_CHECKPASS, checkpass_callback,
+		 conf->cf_userdb);
 
   /* Done setting up the callbacks */
   last_callback();
