@@ -238,8 +238,7 @@ connection_create(runtime_t *runtime, endpoint_t *endpoint,
   link_append(&runtime->rt_connections, &connection->con_link);
 
   /* Send the connection state */
-  if (connection->con_mode == CONN_MODE_ACCEPTING &&
-      !connection_send_state(connection)) {
+  if (!connection_send_state(connection)) {
     connection_destroy(connection, 1);
     return 0;
   }
@@ -347,6 +346,10 @@ connection_send_state(connection_t *conn)
 {
   char conn_desc[ADDR_DESCRIPTION];
   protocol_buf_t pbuf = PROTOCOL_BUF_INIT(PROTOCOL_REPLY, PROTOCOL_CONNSTATE);
+
+  /* Do nothing if we're in connecting mode */
+  if (connection->con_mode == CONN_MODE_CONNECTING)
+    return 1;
 
   /* Give a hint as to the packet size */
   if (!protocol_buf_hint(&pbuf, 20)) {
