@@ -45,6 +45,19 @@ typedef enum _conn_status_e {
   CONN_STAT_ERROR = 255		/**< Connection is in ERROR status */
 } conn_status_t;
 
+/** \brief Connection mode.
+ *
+ * The mode of the connection.  This can be connecting, indicating
+ * that we're originating the connection; accepting, indicating that
+ * we've accepted the connection; or peer, indicating that the
+ * connection is completely bilateral.
+ */
+typedef enum _conn_mode_e {
+  CONN_MODE_CONNECTING,		/**< We originated the connection */
+  CONN_MODE_ACCEPTING,		/**< They originated the connection */
+  CONN_MODE_PEER		/**< Connection is fully bilateral */
+} conn_mode_t;
+
 /** \brief Connection errors.
  *
  * The possible error codes for connection errors.  These are used for
@@ -119,10 +132,12 @@ struct _conn_state_s {
 struct _connection_s {
   magic_t	con_magic;	/**< Magic number */
   link_elem_t	con_link;	/**< Linked list element */
+  conn_mode_t	con_mode;	/**< Connection mode */
   ep_addr_t	con_remote;	/**< Remote address */
   endpoint_t   *con_endpoint;	/**< Endpoint connection came in on */
   ep_type_t	con_type;	/**< Type of connection: peer or client? */
   conn_state_t	con_state;	/**< Connection state */
+  conn_state_t	con_rem_state;	/**< Remote connection state */
   uint32_t	con_flags;	/**< Miscellaneous non-state flags */
   const char   *con_username;	/**< Authenticated user */
   const user_t *con_user;	/**< Attached user DB record */
@@ -186,7 +201,8 @@ struct _connection_s {
  * \param[in,out]	runtime	The runtime.
  * \param[in]		endpoint
  *				The endpoint the connection arrived
- *				on.
+ *				on.  If \c NULL, it is assumed that we
+ *				initiated the connection.
  * \param[in]		sock	The socket for the connection.  The
  *				function takes responsibility for
  *				closing the socket in the event of an

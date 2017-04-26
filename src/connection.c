@@ -145,11 +145,13 @@ connection_create(runtime_t *runtime, endpoint_t *endpoint,
 
   /* Initialize the connection */
   link_elem_init(&connection->con_link, connection);
+  connection->con_mode = endpoint ? CONN_MODE_ACCEPTING : CONN_MODE_CONNECTING;
   connection->con_remote = *addr;
   connection->con_endpoint = endpoint;
-  connection->con_type = endpoint->ep_config->epc_type;
+  connection->con_type = (endpoint ? endpoint->ep_config->epc_type :
+			  ENDPOINT_PEER);
   connection->con_flags = 0;
-  connection->con_username = endpoint->ep_config->epc_username;
+  connection->con_username = endpoint ? endpoint->ep_config->epc_username : 0;
   connection->con_user = user_lookup(runtime->rt_config->cf_userdb,
 				     connection->con_username);
   connection->con_bev = 0;
@@ -164,15 +166,24 @@ connection_create(runtime_t *runtime, endpoint_t *endpoint,
   connection->con_state.cst_status = CONN_STAT_INITIAL;
   connection->con_state.cst_reserved = 0;
 
+  /* Initialize the remote connection state */
+  connection->con_rem_state.cst_flags = 0;
+  connection->con_rem_state.cst_status = CONN_STAT_INITIAL;
+  connection->con_rem_state.cst_reserved = 0;
+
   /* Set the connection flags */
   if (connection->con_type == ENDPOINT_CLIENT)
     connection->con_state.cst_flags |= CONN_STATE_CLI;
-  if (endpoint->ep_addr.ea_flags & EA_LOCAL)
+  if (connection->con_remote.ea_flags & EA_LOCAL)
     /* Local connections are considered secure */
     connection->con_state.cst_flags |= CONN_STATE_SEC;
   else if (runtime->rt_ssl)
     /* SSL is available for non-local connections if set */
     connection->con_state.cst_flags |= CONN_STATE_TLS;
+
+  /* Don't set up the remote connection state, because the other side
+   * is authoritative for that, and we haven't heard from them yet.
+   */
 
   /* Create the bufferevent */
   if (!(connection->con_root = bufferevent_socket_new(
@@ -227,7 +238,8 @@ connection_create(runtime_t *runtime, endpoint_t *endpoint,
   link_append(&runtime->rt_connections, &connection->con_link);
 
   /* Send the connection state */
-  if (!connection_send_state(connection)) {
+  if (connection->con_mode == CONN_MODE_ACCEPTING &&
+      !connection_send_state(connection)) {
     connection_destroy(connection, 1);
     return 0;
   }
