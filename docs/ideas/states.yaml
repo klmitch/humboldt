@@ -1,0 +1,576 @@
+# Client -> Humboldt
+- seq: 0
+  mode: connecting
+  flags: [cli]
+  status: initial
+  start: client->humboldt
+  transitions:
+  - seq: 2
+    mode: connecting
+    flags: [cli, sec]
+    status: cliauth
+    expect:
+      flags: [cli]
+      status: initial
+    action: SASL Auth
+  - seq: 2
+    mode: connecting
+    flags: [cli, sec]
+    status: cliauth
+    expect:
+      flags: [cli, sec]
+      status: initial
+    action: SASL Auth
+  - seq: 1
+    mode: connecting
+    flags: [cli, sec]
+    status: initial
+    expect:
+      flags: [cli, tls]
+      status: initial
+    action: Start TLS
+  - seq: 2
+    mode: connecting
+    flags: [cli, sec]
+    status: cliauth
+    expect:
+      flags: [cli, sec, tls]
+      status: initial
+    action: SASL Auth
+    expected: false
+- seq: 1
+  mode: connecting
+  flags: [cli, sec]
+  status: initial
+  transitions:
+  - seq: 2
+    mode: connecting
+    flags: [cli, sec]
+    status: cliauth
+    expect:
+      flags: [cli, sec, tls]
+      status: initial
+    action: SASL Auth
+- seq: 2
+  mode: connecting
+  flags: [cli, sec]
+  status: cliauth
+  transitions:
+  - seq: 3
+    mode: connecting
+    flags: [cli, sec]
+    status: client
+    expect:
+      flags: [cli, sec]
+      status: client
+    action: null
+  - seq: 3
+    mode: connecting
+    flags: [cli, sec]
+    status: client
+    expect:
+      flags: [cli, sec, tls]
+      status: client
+    action: null
+- seq: 3
+  mode: connecting
+  flags: [cli, sec]
+  status: client
+  accept: true
+
+# Humboldt <- Client
+- seq: 4
+  mode: accepting
+  flags: [cli]
+  status: initial
+  start: humboldt<-client
+  start_send: true
+  transitions:
+  - seq: 8
+    mode: accepting
+    flags: [cli, sec]
+    status: client
+    expect: SASL Auth
+    action: null
+    send: true
+- seq: 5
+  mode: accepting
+  flags: [cli, sec]
+  status: initial
+  start: humboldt<-client
+  start_send: true
+  transitions:
+  - seq: 8
+    mode: accepting
+    flags: [cli, sec]
+    status: client
+    expect: SASL Auth
+    action: null
+    send: true
+- seq: 6
+  mode: accepting
+  flags: [cli, tls]
+  status: initial
+  start: humboldt<-client
+  start_send: true
+  transitions:
+  - seq: 7
+    mode: accepting
+    flags: [cli, sec, tls]
+    status: initial
+    expect: Start TLS
+    action: null
+    send: true
+  - seq: 9
+    mode: accepting
+    flags: [cli, sec, tls]
+    status: client
+    expect: SASL Auth
+    action: null
+    send: true
+    expected: false
+- seq: 7
+  mode: accepting
+  flags: [cli, sec, tls]
+  status: initial
+  transitions:
+  - seq: 9
+    mode: accepting
+    flags: [cli, sec, tls]
+    status: client
+    expect: SASL Auth
+    action: null
+    send: true
+- seq: 8
+  mode: accepting
+  flags: [cli, sec]
+  status: client
+  accept: true
+- seq: 9
+  mode: accepting
+  flags: [cli, sec, tls]
+  status: client
+  accept: true
+
+# Humboldt <- Peer
+- seq: 10
+  mode: accepting
+  flags: []
+  status: initial
+  start: humboldt<-peer
+  start_send: true
+  transitions:
+  - seq: 14
+    mode: accepting
+    flags: [sec]
+    status: auth
+    expect: SASL Auth
+    action: null
+    send: true
+- seq: 11
+  mode: accepting
+  flags: [sec]
+  status: initial
+  start: humboldt<-peer
+  start_send: true
+  transitions:
+  - seq: 14
+    mode: accepting
+    flags: [sec]
+    status: auth
+    expect: SASL Auth
+    action: null
+    send: true
+- seq: 12
+  mode: accepting
+  flags: [tls]
+  status: initial
+  start: humboldt<-peer
+  start_send: true
+  transitions:
+  - seq: 13
+    mode: accepting
+    flags: [sec, tls]
+    status: initial
+    expect: Start TLS
+    action: null
+    send: true
+  - seq: 15
+    mode: accepting
+    flags: [sec, tls]
+    status: auth
+    expect: SASL Auth
+    action: null
+    send: true
+    expected: false
+- seq: 13
+  mode: accepting
+  flags: [sec, tls]
+  status: initial
+  transitions:
+  - seq: 15
+    mode: accepting
+    flags: [sec, tls]
+    status: auth
+    expect: SASL Auth
+    action: null
+    send: true
+- seq: 14
+  mode: accepting
+  flags: [sec]
+  status: auth
+  transitions:
+  - seq: 16
+    mode: connecting
+    flags: [sec]
+    status: auth
+    expect:
+      flags: [sec]
+      status: peerauth
+    action: SASL Auth
+- seq: 15
+  mode: accepting
+  flags: [sec, tls]
+  status: auth
+  transitions:
+  - seq: 17
+    mode: connecting
+    flags: [sec, tls]
+    status: auth
+    expect:
+      flags: [sec, tls]
+      status: peerauth
+    action: SASL Auth
+- seq: 16
+  mode: connecting
+  flags: [sec]
+  status: auth
+  transitions:
+  - seq: 18
+    mode: connecting
+    flags: [sec]
+    status: sync
+    expect:
+      flags: [sec]
+      status: sync
+    action: null
+    send: true
+- seq: 17
+  mode: connecting
+  flags: [sec, tls]
+  status: auth
+  transitions:
+  - seq: 19
+    mode: connecting
+    flags: [sec, tls]
+    status: sync
+    expect:
+      flags: [sec, tls]
+      status: sync
+    action: null
+    send: true
+- seq: 18
+  mode: connecting
+  flags: [sec]
+  status: sync
+  transitions:
+  - seq: 20
+    mode: connecting
+    flags: [sec]
+    status: peer
+    expect: null
+    action: Synchronize
+    send: true
+- seq: 19
+  mode: connecting
+  flags: [sec, tls]
+  status: sync
+  transitions:
+  - seq: 21
+    mode: connecting
+    flags: [sec, tls]
+    status: peer
+    expect: null
+    action: Synchronize
+    send: true
+- seq: 20
+  mode: connecting
+  flags: [sec]
+  status: peer
+  transitions:
+  - seq: 22
+    mode: peer
+    flags: [sec]
+    status: peer
+    expect:
+      flags: [sec]
+      status: peer
+    action: null
+- seq: 21
+  mode: connecting
+  flags: [sec, tls]
+  status: peer
+  transitions:
+  - seq: 23
+    mode: peer
+    flags: [sec, tls]
+    status: peer
+    expect:
+      flags: [sec, tls]
+      status: peer
+    action: null
+- seq: 22
+  mode: peer
+  flags: [sec]
+  status: peer
+  accept: true
+- seq: 23
+  mode: peer
+  flags: [sec, tls]
+  status: peer
+  accept: true
+
+# Peer -> Humboldt
+- seq: 24
+  mode: connecting
+  flags: []
+  status: initial
+  start: peer->humboldt
+  transitions:
+  - seq: 25
+    mode: connecting
+    flags: [sec]
+    status: initial
+    expect:
+      flags: [tls]
+      status: initial
+    action: Start TLS
+  - seq: 28
+    mode: connecting
+    flags: [sec]
+    status: peerauth
+    expect:
+      flags: []
+      status: initial
+    action: SASL Auth
+  - seq: 28
+    mode: connecting
+    flags: [sec]
+    status: peerauth
+    expect:
+      flags: [sec]
+      status: initial
+    action: SASL Auth
+  - seq: 25
+    mode: connecting
+    flags: [sec]
+    status: initial
+    expect:
+      flags: [sec, tls]
+      status: initial
+    action: Start TLS
+    expected: false
+- seq: 25
+  mode: connecting
+  flags: [sec]
+  status: initial
+  start: peer->humboldt
+  transitions:
+  - seq: 25
+    mode: connecting
+    flags: [sec]
+    status: initial
+    expect:
+      flags: [tls]
+      status: initial
+    action: Start TLS
+  - seq: 28
+    mode: connecting
+    flags: [sec]
+    status: peerauth
+    expect:
+      flags: []
+      status: initial
+    action: SASL Auth
+  - seq: 28
+    mode: connecting
+    flags: [sec]
+    status: peerauth
+    expect:
+      flags: [sec]
+      status: initial
+    action: SASL Auth
+  - seq: 28
+    mode: connecting
+    flags: [sec]
+    status: peerauth
+    expect:
+      flags: [sec, tls]
+      status: initial
+    action: SASL Auth
+- seq: 26
+  mode: connecting
+  flags: [tls]
+  status: initial
+  start: peer->humboldt
+  transitions:
+  - seq: 27
+    mode: connecting
+    flags: [sec, tls]
+    status: initial
+    expect:
+      flags: [tls]
+      status: initial
+    action: Start TLS
+  - seq: 29
+    mode: connecting
+    flags: [sec, tls]
+    status: peerauth
+    expect:
+      flags: []
+      status: initial
+    action: SASL Auth
+  - seq: 29
+    mode: connecting
+    flags: [sec, tls]
+    status: peerauth
+    expect:
+      flags: [sec]
+      status: initial
+    action: SASL Auth
+  - seq: 27
+    mode: connecting
+    flags: [sec, tls]
+    status: initial
+    expect:
+      flags: [sec, tls]
+      status: initial
+    action: Start TLS
+    expected: false
+- seq: 27
+  mode: connecting
+  flags: [sec, tls]
+  status: initial
+  transitions:
+  - seq: 29
+    mode: connecting
+    flags: [sec, tls]
+    status: peerauth
+    expect:
+      flags: []
+      status: initial
+    action: SASL Auth
+  - seq: 29
+    mode: connecting
+    flags: [sec, tls]
+    status: peerauth
+    expect:
+      flags: [sec]
+      status: initial
+    action: SASL Auth
+  - seq: 29
+    mode: connecting
+    flags: [sec, tls]
+    status: peerauth
+    expect:
+      flags: [sec, tls]
+      status: initial
+    action: SASL Auth
+- seq: 28
+  mode: connecting
+  flags: [sec]
+  status: peerauth
+  transitions:
+  - seq: 30
+    mode: accepting
+    flags: [sec]
+    status: peerauth
+    expect:
+      flags: [sec]
+      status: auth
+    action: null
+    send: true
+  - seq: 30
+    mode: accepting
+    flags: [sec]
+    status: peerauth
+    expect:
+      flags: [sec, tls]
+      status: auth
+    action: null
+    send: true
+- seq: 29
+  mode: connecting
+  flags: [sec, tls]
+  status: peerauth
+  transitions:
+  - seq: 31
+    mode: accepting
+    flags: [sec, tls]
+    status: peerauth
+    expect:
+      flags: [sec]
+      status: auth
+    action: null
+    send: true
+  - seq: 31
+    mode: accepting
+    flags: [sec, tls]
+    status: peerauth
+    expect:
+      flags: [sec, tls]
+      status: auth
+    action: null
+    send: true
+- seq: 30
+  mode: accepting
+  flags: [sec]
+  status: peerauth
+  transitions:
+  - seq: 32
+    mode: accepting
+    flags: [sec]
+    status: sync
+    expect: SASL Auth
+    action: Synchronize
+    send: true
+- seq: 31
+  mode: accepting
+  flags: [sec, tls]
+  status: peerauth
+  transitions:
+  - seq: 33
+    mode: accepting
+    flags: [sec, tls]
+    status: sync
+    expect: SASL Auth
+    action: Synchronize
+    send: true
+- seq: 32
+  mode: accepting
+  flags: [sec]
+  status: sync
+  transitions:
+  - seq: 22
+    mode: peer
+    flags: [sec]
+    status: peer
+    expect:
+      flags: [sec, tls]
+      status: peer
+    action: null
+    send: true
+- seq: 33
+  mode: accepting
+  flags: [sec, tls]
+  status: sync
+  transitions:
+  - seq: 23
+    mode: peer
+    flags: [sec, tls]
+    status: peer
+    expect:
+      flags: [sec, tls]
+      status: peer
+    action: null
+    send: true

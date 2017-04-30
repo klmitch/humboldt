@@ -1,0 +1,70 @@
+The Humboldt protocol state machine is responsible for moving a
+connection from the initial state to the "established" state, where
+"established" varies by connection type (client vs. peer) and perhaps
+available security options.
+
+The basic problem is that the state of a connection actually consists
+of several parts: the connection mode (accepting vs. connecting
+vs. peer); our local state flags; our local connection status; the
+remote state flags; and the remote connection status.  We have several
+possible transitions from one state to another, possibly identical
+state (e.g., from the initial, unsecure state we can either issue a
+start TLS action and move to the secure state, or we can initiate SASL
+and achieve a secure state through that exchange, but after a start
+TLS action the next available move is to initiate SASL).  This makes
+the state machine rather complicated to reason about, which is why
+it's a stumbling block in the road to secured Humboldt.  Given the
+complication, it may be necessary to build the state machine through
+an external program which compiles the state machine for us.  That
+still leaves the problem of how to define the states and the
+transitions between those states, however, as well as how to
+communicate with the state machine to tell it what external actions
+have been taken or completed.
+
+Let's start with how to define transitions, as I think those will help
+us establish what the states are.  A transition has
+preconditions--basically, the acceptable set of connection states, as
+defined above, required before we can take a particular transition.
+This is a predicate, and may trigger either an active action
+("initiate TLS") or a passive action ("wake me when the other side
+finishes authentication").  Once the action is complete, there is a
+possible mutation to the connection state that would be actioned; this
+can only affect the mode and our local state flags and status, as the
+other side is authoritative for the remote state flags and status
+(though changes of those could be reflected as passive actions).
+
+From this we start to get a picture of the state machine complexity,
+and I am reminded of the NFAs that efficient regular expression
+matchers build and then convert to DFAs; there, transitions also have
+preconditions ("the character at this position must be in this set"),
+and we can regard actions as alternate transitions in the execution.
+To avoid the transition split we have to deal with in regular
+expression logic, I propose that the precondition must be an exact
+match; that will presumably result in more states, but as translation
+to a DFA would likely create that state anyway, I don't view that as a
+particular loss.
+
+So, a transition consists of a precondition (tail of the transition),
+an action to wait for, and an action to take (head of the
+transition).  If we get an action, but the precondition fails to
+match, the transition is illegal and we look for another that matches;
+if we don't find any legal transitions, then we error out.  When we do
+get an action and the precondition matches--and there should be only
+one of these--then we perform the action to take and transition to the
+next state in the machine.
+
+The "action" concept is a little ambiguous.  I propose that what I
+called the "action to wait for" should be called the "expectation", to
+disambiguate it from the "action to take".  So, now we have a
+transition being composed of a precondition, an expectation, and an
+action.  The precondition can be 0, making the transition valid in any
+state (but I don't think we'll use that in this); the expectation can
+be 0, meaning that we'll take the transition immediately; and the
+action can be 0, meaning that we'll just transition to the state
+without doing anything.
+
+I think I can further simplify the transitions because I can now state
+that the precondition *is* the local state, composed of the connection
+mode, local state flags, and local status; the remote state flags and
+remote status would be the expectation for the transition.  Now I
+think I can begin to sketch what the state machine looks like.
